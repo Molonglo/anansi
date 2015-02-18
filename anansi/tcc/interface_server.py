@@ -21,11 +21,11 @@ config.read(os.path.join(config_path,"anansi.cfg"))
 ANANSI_SERVER_IP = config.get("IPAddresses","anansi_ip")
 ANANSI_SERVER_PORT = config.getint("IPAddresses","anansi_port")
 
-WIND_STOW_NS = config.get("Presets","wind_stow_ns")
-WIND_STOW_EW = config.get("Presets","wind_stow_ew")
+WIND_STOW_NS = config.get("DrivePresets","wind_stow_ns")
+WIND_STOW_EW = config.get("DrivePresets","wind_stow_ew")
 
-MAINTENANCE_STOW_NS = config.get("Presets","maintenance_stow_ns")
-MAINTENANCE_STOW_EW = config.get("Presets","maintenance_stow_ns")
+MAINTENANCE_STOW_NS = config.get("DrivePresets","maintenance_stow_ns")
+MAINTENANCE_STOW_EW = config.get("DrivePresets","maintenance_stow_ew")
             
 class UserInterface(Thread):
     def __init__(self):

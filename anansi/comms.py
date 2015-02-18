@@ -7,8 +7,7 @@ from threading import Thread,Event
 from Queue import Queue
 import ctypes as C
 import logging
-from logging.config import fileConfig
-fileConfig("logger.cfg")
+logging.basicConfig()
 MAX_PACKET_SIZE = 64000 #bytes
 
 class SocketError(Exception):
@@ -194,7 +193,11 @@ class UDPSender(BaseConnection):
             self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         
     def send(self,msg):
-        self.sock.sendto(msg,(self.ip,self.port))
+        try:
+            self.sock.sendto(msg,(self.ip,self.port))
+        except Exception as error:
+            logging.error(repr(error))
+            
 
 
 if __name__ == "__main__":
