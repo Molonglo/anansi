@@ -106,7 +106,20 @@ def it_pack(val):
     to_pack.append(val&255)
     to_pack.append((val>>8)&255)
     to_pack.append((val>>16)&255)
+    print to_pack
     return pack("BBB",*to_pack)
+
+
+def pos_dir_pack(direction,speed,arm):
+    dirs = {"north":0,
+            "south":1}
+    speeds = {"fast":0,
+              "slow":1}
+    if arm == "east":
+        val = 2*dirs[direction] + speeds[speed]
+    elif arm == "west":
+        val = 8*dirs[direction] + 4*speeds[speed]
+    return val
 
 def it_unpack(val):
     x = unpack("BBB",val)

@@ -37,18 +37,22 @@ STATUS_DICT_DEFAULTS = {
     "MD":"",
     "LMST":"",
     "west_ns_tilt":"",
+    "west_ns_count":0,
     "west_ns_status":"",
     "west_ns_on_target":False,
     "west_ns_at_limit":False,
     "west_md_tilt":"",
+    "west_md_count":0,
     "west_md_status":"",
     "west_md_on_target":False,
     "west_md_at_limit":False,
     "east_ns_tilt":"",
+    "east_ns_count":0,
     "east_ns_status":"",
     "east_ns_on_target":False,
     "east_ns_at_limit":False,
     "east_md_tilt":"",
+    "east_md_count":0,
     "east_md_status":"",
     "east_md_on_target":False,
     "east_md_at_limit":False
@@ -107,6 +111,7 @@ class StatusBroadcaster(Thread):
         def _append(root,ew,nsmd):
             prefix = "%s_%s"%(ew,nsmd)
             root.append(self._xml_from_key("%s_tilt"%prefix))
+            root.append(self._xml_from_key("%s_count"%prefix))
             root.append(self._xml_from_key("%s_status"%prefix))
             root.append(self._xml_from_key("%s_on_target"%prefix))
             root.append(self._xml_from_key("%s_at_limit"%prefix))
