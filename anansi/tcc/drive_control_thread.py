@@ -86,7 +86,6 @@ class BaseDriveInterface(Thread):
             if (code == "S") and (response == 0):
                 self.run = self._drive_thread
                 self.start()
-                sleep(0.5)
                 break
         
 
@@ -97,7 +96,6 @@ class BaseDriveInterface(Thread):
             if (code == "S") and (response == 0):
                 break
         self._close_client()
-        sleep(0.5)
 
     @decorators.log_args
     def _receive_message(self):
@@ -133,6 +131,10 @@ class BaseDriveInterface(Thread):
         if code == "E":
             self.error_queue.put(EZ80Error(self,decoded_response))
             raise EZ80Error(self,decoded_response)
+        
+        if (code == "C") and (decoded_response >= 15):
+            sleep(0.3)
+
         return code,decoded_response
     
     @decorators.log_args
@@ -155,7 +157,6 @@ class BaseDriveInterface(Thread):
         while code != "S":
             code,_ = self._parse_message(*self._receive_message())
         self._close_client()
-        sleep(0.5)
 
     @decorators.log_args
     def tilts_to_counts(self,east_tilt,west_tilt):
