@@ -7,7 +7,7 @@ from threading import Thread,Event
 from Queue import Queue
 import ctypes as C
 import logging
-logging.basicConfig()
+from anansi import decorators
 MAX_PACKET_SIZE = 64000 #bytes
 
 class SocketError(Exception):
@@ -16,6 +16,7 @@ class SocketError(Exception):
         logging.getLogger(self.__class__.__name__).error("%s (%s,%d)",msg,obj.ip,obj.port)
 
 class BaseConnection(object):
+    @decorators.log_args
     def __init__(self,ip,port,sock_family,sock_type):
         super(BaseConnection,self).__init__()
         self.ip = ip
@@ -55,6 +56,7 @@ class BaseConnection(object):
 #####################
 
 class BaseHandler(SocketServer.BaseRequestHandler):
+    @decorators.log_args
     def __init__(self, request, client_address, server):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.debug('Handling request from %s'%(repr(client_address)))
@@ -88,6 +90,7 @@ class QueueHandler(BaseHandler):
 
 
 class TCPServer(SocketServer.TCPServer):
+    @decorators.log_args
     def __init__(self, ip, port, handler_class=QueueHandler):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.recv_q = Queue()
@@ -118,10 +121,12 @@ class TCPClient(BaseConnection):
         self.connect()
         self.logger.debug("Connected TCP client to (%s,%d)"%(self.ip,self.port))
         
+    @decorators.log_args
     def send(self,msg):
         self.logger.debug("Sending %d bytes to (%s,%d)"%(len(msg),self.ip,self.port))
         self.sock.send(msg)
         
+    @decorators.log_args
     def receive(self,n=MAX_PACKET_SIZE):
         msg = self.sock.recv(n)
         self.logger.debug("Received %d bytes from (%s,%d)"%(len(msg),self.ip,self.port))
@@ -192,6 +197,7 @@ class UDPSender(BaseConnection):
         if broadcast:
             self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         
+    @decorators.log_args
     def send(self,msg):
         try:
             self.sock.sendto(msg,(self.ip,self.port))

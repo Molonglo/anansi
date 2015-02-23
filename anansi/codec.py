@@ -2,7 +2,9 @@ from datetime import datetime
 from threading import _Timer,Thread,Event
 import ctypes as C
 from struct import unpack,pack
+from anansi import decorators
  
+@decorators.log_args
 def gen_header_decoder(control_node):
     header_decoder = [
         ("Control node"  ,lambda x:x,len(control_node)),
@@ -13,6 +15,7 @@ def gen_header_decoder(control_node):
     header_size= sum(ii[2] for ii in header_decoder)
     return header_decoder,header_size
 
+@decorators.log_args
 def simple_decoder(msg,babel_fish):
     decoded = {}
     ii = 0
@@ -21,6 +24,7 @@ def simple_decoder(msg,babel_fish):
         ii+=nbytes
     return decoded
 
+@decorators.log_args
 def simple_encoder(node,command,data=None):
     if data is None:
         data = ""
@@ -30,6 +34,7 @@ def simple_encoder(node,command,data=None):
     header += command
     return header,data
 
+@decorators.log_args
 def ft_unpack(data):
     """IEEE754 float data unpacker
 
@@ -60,6 +65,7 @@ def ft_unpack(data):
     result.value *= -1.0 if (i>>(bits-1))&1 else 1.0
     return result.value
 
+@decorators.log_args
 def ft_pack(value):
     """IEEE754 float data packer
 
@@ -100,27 +106,16 @@ def ft_pack(value):
     output[2] = result.value >> 8
     output[3] = result.value >> 0
     return output
-    
+
+@decorators.log_args    
 def it_pack(val):
     to_pack = []
     to_pack.append(val&255)
     to_pack.append((val>>8)&255)
     to_pack.append((val>>16)&255)
-    print to_pack
     return pack("BBB",*to_pack)
 
-
-def pos_dir_pack(direction,speed,arm):
-    dirs = {"north":0,
-            "south":1}
-    speeds = {"fast":0,
-              "slow":1}
-    if arm == "east":
-        val = 2*dirs[direction] + speeds[speed]
-    elif arm == "west":
-        val = 8*dirs[direction] + 4*speeds[speed]
-    return val
-
+@decorators.log_args
 def it_unpack(val):
     x = unpack("BBB",val)
     val = x[0] + x[1]*256 + x[2]*256**2
