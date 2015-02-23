@@ -1,6 +1,4 @@
 import logging
-logging.basicConfig(level=logging.DEBUG)
-
 from threading import Thread,Event
 from Queue import Queue
 from multiprocessing import Manager
@@ -190,7 +188,7 @@ class BaseDriveInterface(Thread):
         
     @decorators.log_args
     def set_east_tilt(self,east_tilt,speed="fast"):
-        east_count,_ = tilts_to_counts(east_tilt,0)
+        east_count,_ = self.tilts_to_counts(east_tilt,0)
         self.set_east_tilt_from_counts(east_count,speed)
 
     @decorators.log_args
@@ -205,7 +203,7 @@ class BaseDriveInterface(Thread):
      
     @decorators.log_args
     def set_west_tilt(self,west_tilt,speed="fast"):
-        _,west_count = tilts_to_counts(0,west_tilt)
+        _,west_count = self.tilts_to_counts(0,west_tilt)
         self.set_west_tilt_from_counts(west_count,speed)
 
     @decorators.log_args

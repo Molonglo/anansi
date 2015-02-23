@@ -1,6 +1,4 @@
 import logging
-logging.basicConfig(level=20)
-
 from threading import Thread,Event
 from Queue import Queue
 from multiprocessing import Manager
@@ -8,6 +6,7 @@ from anansi.comms import TCPClient
 from struct import pack,unpack
 from anansi import codec
 from anansi import decorators
+from pprint import pprint
 import os
 
 
@@ -100,7 +99,6 @@ class BaseDriveInterface(Thread):
     @decorators.log_args
     def _receive_message(self):
         response = self.client.receive(self.header_size)
-        print "Received message:",repr(response)
         header = codec.simple_decoder(response,self.header_decoder)
         data_size = header["HOB"]*256+header["LOB"]
         if data_size > 0:
@@ -127,6 +125,8 @@ class BaseDriveInterface(Thread):
             self.status_dict.update(decoded_response)
         else:
             decoded_response = None
+
+        logging.info("Code: %s\nData: %s"%(code,repr(decoded_response)))
 
         if code == "E":
             self.error_queue.put(EZ80Error(self,decoded_response))
@@ -190,7 +190,7 @@ class BaseDriveInterface(Thread):
         
     @decorators.log_args
     def set_east_tilt(self,east_tilt,speed="fast"):
-        east_count,_ = tilts_to_counts(east_tilt,0)
+        east_count,_ = self.tilts_to_counts(east_tilt,0)
         self.set_east_tilt_from_counts(east_count,speed)
 
     @decorators.log_args
@@ -205,7 +205,7 @@ class BaseDriveInterface(Thread):
      
     @decorators.log_args
     def set_west_tilt(self,west_tilt,speed="fast"):
-        _,west_count = tilts_to_counts(0,west_tilt)
+        _,west_count = self.tilts_to_counts(0,west_tilt)
         self.set_west_tilt_from_counts(west_count,speed)
 
     @decorators.log_args
