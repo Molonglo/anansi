@@ -251,7 +251,7 @@ class NSDriveInterface(BaseDriveInterface):
         return self._dir[east_dir],self._dir[west_dir]
         
     def _calculate_tilts(self,u_dict):
-        et,wt = self.counts_to_tilts(self,u_dict["east_ns_count"],
+        et,wt = self.counts_to_tilts(u_dict["east_ns_count"],
                                      u_dict["west_ns_count"])
         u_dict["east_ns_tilt"] = et
         u_dict["west_ns_tilt"] = wt
@@ -300,7 +300,7 @@ class MDDriveInterface(BaseDriveInterface):
         return self._dir[east_dir],self._dir[west_dir]
     
     def _calculate_tilts(self,u_dict):
-        et,wt = self.counts_to_tilts(self,u_dict["east_md_count"],
+        et,wt = self.counts_to_tilts(u_dict["east_md_count"],
                                      u_dict["west_md_count"])
         u_dict["east_md_tilt"] = et
         u_dict["west_md_tilt"] = wt
