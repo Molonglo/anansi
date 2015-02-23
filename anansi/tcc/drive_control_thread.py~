@@ -1,5 +1,5 @@
 import logging
-logging.basicConfig(level=20)
+logging.basicConfig(level=logging.DEBUG)
 
 from threading import Thread,Event
 from Queue import Queue
