@@ -32,7 +32,7 @@ MD_TILT_ZERO = config.getfloat("DriveParameters","md_tilt_zero")
 FAST = 0
 SLOW = 1
 NORTH_OR_WEST = 0
-SOTUH_OR_EAST = 1
+SOUTH_OR_EAST = 1
 
 class InvalidCounts(Exception):
     def __init__(self,message):
