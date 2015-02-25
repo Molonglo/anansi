@@ -6,6 +6,7 @@ from anansi.comms import TCPClient
 from struct import pack,unpack
 from anansi import codec
 from anansi import decorators
+from pprint import pprint
 import os
 
 
@@ -28,6 +29,16 @@ MD_WEST_SCALING = config.getfloat("DriveParameters","md_west_scaling")
 MD_EAST_SCALING = config.getfloat("DriveParameters","md_east_scaling")
 MD_TILT_ZERO = config.getfloat("DriveParameters","md_tilt_zero")
 
+FAST = 0
+SLOW = 1
+NORTH_OR_WEST = 0
+SOTUH_OR_EAST = 1
+
+class InvalidCounts(Exception):
+    def __init__(self,message):
+        super(InvalidMoveRequest,self).__init__(message)
+        logging.getLogger(self.__class__.__name__).warning(message)
+
 class EZ80Error(Exception):
     def __init__(self,obj,code):
         message = "Exception %d caught from eZ80 at %s:%d"%(code,obj._ip,obj._port) 
@@ -37,7 +48,12 @@ class EZ80Error(Exception):
         obj.event.set()
 
 class BaseDriveInterface(Thread):
-    _speeds = {"fast":0,"slow":1}
+    _data_decoder = [
+        ("east_status" ,lambda x: unpack("B",x)[0],1),
+        ("east_count"   ,lambda x: codec.it_unpack(x),3),
+        ("west_status" ,lambda x: unpack("B",x)[0],1),
+        ("west_count"   ,lambda x: codec.it_unpack(x),3)]
+    
     @decorators.log_args
     def __init__(self,timeout,kevent=None,status_dict=None):
         self.timeout = timeout
@@ -85,7 +101,6 @@ class BaseDriveInterface(Thread):
                 self.run = self._drive_thread
                 self.start()
                 break
-        
 
     @decorators.log_args
     def _drive_thread(self):
@@ -98,7 +113,6 @@ class BaseDriveInterface(Thread):
     @decorators.log_args
     def _receive_message(self):
         response = self.client.receive(self.header_size)
-        print "Received message:",repr(response)
         header = codec.simple_decoder(response,self.header_decoder)
         data_size = header["HOB"]*256+header["LOB"]
         if data_size > 0:
@@ -125,6 +139,8 @@ class BaseDriveInterface(Thread):
             self.status_dict.update(decoded_response)
         else:
             decoded_response = None
+
+        logging.info("Code: %s\nData: %s"%(code,repr(decoded_response)))
 
         if code == "E":
             self.error_queue.put(EZ80Error(self,decoded_response))
@@ -170,52 +186,74 @@ class BaseDriveInterface(Thread):
 
     @decorators.log_args
     def set_tilts(self,east_tilt,west_tilt,
-                  east_speed="fast",west_speed="fast"):
+                  force_east_slow=False,force_west_slow=False):
         east_count,west_count = self.tilts_to_counts(east_tilt,west_tilt)
-        self.set_tilts_from_counts(east_count,west_count,east_speed,west_speed)
+        self.set_tilts_from_counts(east_count,west_count,force_east_slow,force_west_slow)
                 
     @decorators.log_args
     def set_tilts_from_counts(self,east_count,west_count,
-                              east_speed="fast",west_speed="fast"):
+                              force_east_slow=False,force_west_slow=False):
         drive_code = "1"
         encoded_count = codec.it_pack(east_count) + codec.it_pack(west_count)
-        ed,wd = self._get_directions(east_count,west_count)
-        e_dir_speed = 2*ed + self._speeds[east_speed]
-        w_dir_speed = 8*wd + 4*self._speeds[west_speed]
-        encoded_dir_speed = pack("B",e_dir_speed + w_dir_speed)
-        data = encoded_count+encoded_dir_speed
-        self._drive(drive_code,data)
+        ed,wd,es,ws = self._prepare(east_count,west_count,force_east_slow,force_west_slow)
+
+        if es is None or ws is None:
+            # if neither arm will move more than 40 counts
+            raise InvalidCounts("E and W arm requested move of less than 40 counts")
+        elif ws is None:
+            # if only east arm is to move
+            self.set_east_tilt_from_counts(east_count,force_east_slow)
+        elif es is None:
+            # if only west arm is to move
+            self.set_west_tilt_from_counts(west_count,force_west_slow)
+        else:
+            e_dir_speed = 2*ed + es
+            w_dir_speed = 8*wd + 4*ws
+            encoded_dir_speed = pack("B",e_dir_speed + w_dir_speed)
+            data = encoded_count+encoded_dir_speed
+            self._drive(drive_code,data)
         
     @decorators.log_args
-    def set_east_tilt(self,east_tilt,speed="fast"):
+    def set_east_tilt(self,east_tilt,force_slow=False):
         east_count,_ = self.tilts_to_counts(east_tilt,0)
-        self.set_east_tilt_from_counts(east_count,speed)
+        self.set_east_tilt_from_counts(east_count,force_slow)
 
     @decorators.log_args
-    def set_east_tilt_from_counts(self,east_count,speed="fast"):
+    def set_east_tilt_from_counts(self,east_count,force_slow=False):
         drive_code = "2"
         encoded_count = codec.it_pack(east_count)
-        ed,_ = self._get_directions(east_count,None)
-        dir_speed = 2*ed + self._speeds[speed]
-        encoded_dir_speed = pack("B",dir_speed)
-        data = encoded_count+encoded_dir_speed
-        self._drive(drive_code,data)
+        ed,_,es,_ = self._prepare(east_count,None,force_slow,None)
+        if es is None:
+            raise InvalidCounts("E arm requested move of less than 40 counts")
+        else:
+            dir_speed = 2*ed + es
+            encoded_dir_speed = pack("B",dir_speed)
+            data = encoded_count+encoded_dir_speed
+            self._drive(drive_code,data)
      
     @decorators.log_args
-    def set_west_tilt(self,west_tilt,speed="fast"):
+    def set_west_tilt(self,west_tilt,force_slow=False):
         _,west_count = self.tilts_to_counts(0,west_tilt)
-        self.set_west_tilt_from_counts(west_count,speed)
+        self.set_west_tilt_from_counts(west_count,force_slow)
 
     @decorators.log_args
-    def set_west_tilt_from_counts(self,west_count,speed="fast"):
+    def set_west_tilt_from_counts(self,west_count,force_slow=False):
         drive_code = "3"
         data = codec.it_pack(west_count)
-        _,wd = self._get_directions(west_count,None)
-        dir_speed = 8*wd + 4*self._speeds[speed]
-        encoded_dir_speed = pack("B",dir_speed)
-        data = encoded_count+encoded_dir_speed
-        self._drive(drive_code,data)
-    
+        _,wd,_,ws = self._prepare(None,west_count,None,force_slow)
+        if ws is None:
+            raise InvalidCounts("W arm requested move of less than 40 counts")
+        else:
+            dir_speed = 8*wd + 4*ws
+            encoded_dir_speed = pack("B",dir_speed)
+            data = encoded_count+encoded_dir_speed
+            self._drive(drive_code,data)
+
+    def _calculate_tilts(self,u_dict):
+        et,wt = self.counts_to_tilts(u_dict["east_count"],u_dict["west_count"])
+        u_dict["east_tilt"] = et
+        u_dict["west_tilt"] = wt
+        return u_dict
 
 class NSDriveInterface(BaseDriveInterface):
     _node = NS_NODE_NAME
@@ -224,36 +262,43 @@ class NSDriveInterface(BaseDriveInterface):
     _west_scaling = NS_WEST_SCALING
     _east_scaling = NS_EAST_SCALING
     _tilt_zero = NS_TILT_ZERO
-    _data_decoder = [
-        ("east_ns_status" ,lambda x: unpack("B",x)[0],1),
-        ("east_ns_count"   ,lambda x: codec.it_unpack(x),3),
-        ("west_ns_status" ,lambda x: unpack("B",x)[0],1),
-        ("west_ns_count"   ,lambda x: codec.it_unpack(x),3)]
-    _dir = {"north":0,"south":1}
 
     @decorators.log_args
     def __init__(self,timeout=5.0,kevent=None,status_dict=None):
         super(NSDriveInterface,self).__init__(timeout,kevent,status_dict)
 
     @decorators.log_args
-    def _get_directions(self,east_counts=None,west_counts=None):
+    def _prepare(self,east_counts=None,west_counts=None,
+                 force_east_slow=False,force_west_slow=False):
         status = self.get_status()
-        if east_counts:
-            east_dir = "north" if east_counts > status["east_ns_count"] else "south"
+        if east_counts is not None:
+            east_offset = east_counts - status["east_count"]
+            east_dir = NORTH_OR_WEST if east_offset >= 0 else SOUTH_OR_EAST
+            if abs(east_offset) <= 40:
+                east_speed = None
+            elif abs(east_offset) <= 400 or force_east_slow:
+                east_speed = SLOW
+            else:
+                east_speed = FAST
         else:
             east_dir = None
-        if west_counts:
-            west_dir = "north" if west_counts > status["west_ns_count"] else "south"
+            east_speed = None
+
+        if west_counts is not None:
+                west_offset = west_counts - status["west_count"]
+            west_dir = NORTH_OR_WEST if west_offset >= 0 else NORTH_OR_WEST
+            if abs(west_offset) <= 40:
+                west_speed = None
+            elif abs(west_offset) <= 400 or force_west_slow:
+                west_speed = SLOW
+            else:
+                west_speed = FAST
         else:
             west_dir = None
-        return self._dir[east_dir],self._dir[west_dir]
+            west_speed = None
         
-    def _calculate_tilts(self,u_dict):
-        et,wt = self.counts_to_tilts(u_dict["east_ns_count"],
-                                     u_dict["west_ns_count"])
-        u_dict["east_ns_tilt"] = et
-        u_dict["west_ns_tilt"] = wt
-        return u_dict
+        return east_dir,west_dir,east_speed,west_speed
+        
 
 
 class MDDriveInterface(BaseDriveInterface):
@@ -263,12 +308,6 @@ class MDDriveInterface(BaseDriveInterface):
     _west_scaling = MD_WEST_SCALING
     _east_scaling = MD_EAST_SCALING
     _tilt_zero = MD_TILT_ZERO
-    _data_decoder = [
-        ("east_md_status" ,lambda x: unpack("B",x)[0],1),
-        ("east_md_count"   ,lambda x: codec.it_unpack(x),3),
-        ("west_md_status" ,lambda x: unpack("B",x)[0],1),
-        ("west_md_count"   ,lambda x: codec.it_unpack(x),3)]
-    _dir = {"west":0,"east":1}
     @decorators.log_args
     def __init__(self,timeout=5.0,kevent=None,status_dict=None):
         super(MDDriveInterface,self).__init__(timeout,kevent,status_dict)
