@@ -47,7 +47,6 @@ def test_north_limit():
 def test_south_limit():
     _test_slew(-1.5,"fast")
     
-    
 if __name__ == "__main__":
     functions = [i for i in dir() if i.split("_")[0] == "test"]
     for func in functions:

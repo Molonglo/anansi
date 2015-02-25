@@ -283,9 +283,9 @@ class NSDriveInterface(BaseDriveInterface):
         else:
             east_dir = None
             east_speed = None
-
+            
         if west_counts is not None:
-                west_offset = west_counts - status["west_count"]
+            west_offset = west_counts - status["west_count"]
             west_dir = NORTH_OR_WEST if west_offset >= 0 else NORTH_OR_WEST
             if abs(west_offset) <= 40:
                 west_speed = None
@@ -296,7 +296,7 @@ class NSDriveInterface(BaseDriveInterface):
         else:
             west_dir = None
             west_speed = None
-        
+            
         return east_dir,west_dir,east_speed,west_speed
         
 
