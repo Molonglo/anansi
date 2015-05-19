@@ -131,7 +131,7 @@ class BaseDriveInterface(Thread):
     @decorators.log_args
     def _parse_message(self,header,data):
         code = header["Command option"]
-        if code in ["E","I","W","V","S"]:
+        if code in ["E","I","W","V","S","C"]:
             decoded_response = unpack("B",data)[0]
         elif code == "U":
             decoded_response = codec.simple_decoder(data,self._data_decoder)
