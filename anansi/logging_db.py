@@ -1,13 +1,14 @@
 import MySQLdb
+import os
 
 from ConfigParser import ConfigParser
 config_path = os.environ["ANANSI_CONFIG"]
 config = ConfigParser()
 config.read(os.path.join(config_path,"logging_db.cfg"))
-USER   = config.getfloat("Login","user")
-PASSWD = config.getfloat("Login","password")
-HOST   = config.getfloat("Login","host")
-NAME   = config.getfloat("Login","name")
+USER   = config.get("Login","user")
+PASSWD = config.get("Login","password")
+HOST   = config.get("Login","host")
+NAME   = config.get("Login","name")
 
 class BaseDBManager(object):
     def __init__(self):
@@ -43,6 +44,7 @@ class BaseDBManager(object):
 
     @with_connection
     def execute_insert(self,insert):
+        print insert
         """Execute a mysql insert/update/delete"""
         try:
             self.cursor.execute(insert)
@@ -110,7 +112,7 @@ class MolongloLoggingDataBase(BaseDBManager):
     __USER = USER
     __PASSWD = PASSWD
     def __init__(self):
-        super(SuperbDataBase,self).__init__()
+        super(MolongloLoggingDataBase,self).__init__()
 
     def connect(self):
         return MySQLdb.connect(
@@ -121,30 +123,30 @@ class MolongloLoggingDataBase(BaseDBManager):
 
     def log_command(self,cmd_type,xml_msg):
         query = ("INSERT INTO Commands (utc,command_type,xml) "
-                 "VALUES (NOW(),%d,%s)")%(cmd_type,xml_msg)
+                 "VALUES (UTC_TIMESTAMP(),'%s','%s')")%(cmd_type,xml_msg)
         self.execute_insert(query)
 
     def log_position(self,drive,west_count,east_count):
         query = ("INSERT INTO Position_eZ80 " 
                  "(utc,drive,west_count,east_count) "
-                 "VALUES (NOW(),%s,%d,%d)")%(west_count,east_count)
+                 "VALUES (UTC_TIMESTAMP(),'%s',%d,%d)")%(west_count,east_count)
         self.execute_insert(query)
 
     def log_eZ80_status(self,code_level,code_num):
         query = ("INSERT INTO Status_eZ80 "
                  "(utc,code_level,code_num) "
-                 "VALUES (NOW(),%s,%d)")%(code_level,code_num)
+                 "VALUES (UTC_TIMESTAMP(),'%s',%d)")%(code_level,code_num)
         self.execute_insert(query)
 
     def log_eZ80_command(self,code,data):
         query = ("INSERT INTO Commands_eZ80 "
                  "(utc,code,message) "
-                 "VALUES (NOW(),%s,%s)")%(code,str(data))
+                 "VALUES (UTC_TIMESTAMP(),'%s','%s')")%(code,str(data))
         self.execute_insert(query)
     
     def log_tcc_status(self,sender,level,msg):
         query = ("INSERT INTO Status_TCC "
                  "(location,utc,level,message) "
-                 "VALUES (%s,NOW(),%d,%s)")%(sender,level,msg)
+                 "VALUES ('%s',UTC_TIMESTAMP(),'%s','%s')")%(sender,level,msg)
         self.execute_insert(query)
         

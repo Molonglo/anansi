@@ -1,4 +1,4 @@
-from anansi.logging_utils.logging_db import MolongloLoggingDataBase as LogDB
+from anansi.logging_db import MolongloLoggingDataBase as LogDB
 from anansi.comms import TCPClient
 from struct import unpack
 from anansi import codec
@@ -13,7 +13,7 @@ class BaseDriveInterface(object):
     def __init__(self,timeout):
         self.timeout = timeout
         self.client = None
-        decoder,size = codec.gen_header_decoder(node)
+        decoder,size = codec.gen_header_decoder(self._node)
         self.header_decoder = decoder
         self.header_size = size
         self.log = LogDB()
