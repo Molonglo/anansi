@@ -1,7 +1,7 @@
 from threading import Thread
 import logging
 logging.basicConfig(format="%(levelname)s  %(thread)s  %(message)s",level=20)
-from anansi.tcc import drive_control_thread as dct
+from anansi.tcc.drives.ns_drive import NSDriveInterface
 from time import sleep
 
 def log_func_name(func):
@@ -11,7 +11,7 @@ def log_func_name(func):
     return wrapped
 
 def _test_slew(tilt,force_slow):
-    drive = dct.NSDriveInterface()
+    drive = NSDriveInterface()
     drive.set_east_tilt(tilt,force_slow)
     drive.join()
     if not drive.error_queue.empty():
@@ -60,14 +60,14 @@ def thread_test():
     thread2.start()
     thread1.join()
     sleep(10)
-    drive = dct.NSDriveInterface()
+    drive = NSDriveInterface()
     drive.stop()
     thread2.join()
 
 try:   
     thread_test()
 except:
-    drive = dct.NSDriveInterface()
+    drive = NSDriveInterface()
     drive.stop()
 
     

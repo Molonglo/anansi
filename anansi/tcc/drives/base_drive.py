@@ -23,8 +23,13 @@ class BaseDriveInterface(object):
         
     def _open_client(self):
         if self.client is None:
-            self.client = TCPClient(self._ip,self._port,timeout=self.timeout)
-            
+            try:
+                self.client = TCPClient(self._ip,self._port,timeout=self.timeout)
+            except Exception as e:
+                self.log.log_tcc_status("BaseDriveInterface._open_client",
+                                        "error", str(e))
+                raise e
+
     def _close_client(self):
         if self.client is not None:
             self.client.close()
@@ -42,9 +47,8 @@ class BaseDriveInterface(object):
 
     def _send_message(self,code,data=None):
         header,msg = codec.simple_encoder(self._node,code,data)
-        self.log.log_eZ80_status(code,data)
         self.client.send(header)
         if len(msg)>0:
             self.client.send(msg)
-
+        self.log.log_eZ80_command(code,data)
 
