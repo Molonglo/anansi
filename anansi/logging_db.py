@@ -1,5 +1,6 @@
 import MySQLdb
 import os
+import warnings
 
 from ConfigParser import ConfigParser
 config_path = os.environ["ANANSI_CONFIG"]
@@ -44,7 +45,6 @@ class BaseDBManager(object):
 
     @with_connection
     def execute_insert(self,insert):
-        print insert
         """Execute a mysql insert/update/delete"""
         try:
             self.cursor.execute(insert)
@@ -129,7 +129,7 @@ class MolongloLoggingDataBase(BaseDBManager):
     def log_position(self,drive,west_count,east_count):
         query = ("INSERT INTO Position_eZ80 " 
                  "(utc,drive,west_count,east_count) "
-                 "VALUES (UTC_TIMESTAMP(),'%s',%d,%d)")%(west_count,east_count)
+                 "VALUES (UTC_TIMESTAMP(),'%s',%d,%d)")%(drive,west_count,east_count)
         self.execute_insert(query)
 
     def log_eZ80_status(self,code_level,code_num):

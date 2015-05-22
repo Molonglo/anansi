@@ -9,6 +9,7 @@ from anansi import codec
 from anansi import decorators
 from pprint import pprint
 import os
+from time import sleep
 from ConfigParser import ConfigParser
 
 config_path = os.environ["ANANSI_CONFIG"]
@@ -20,7 +21,10 @@ NS_NODE_NAME = config.get("DriveParameters","ns_node_name")
 NS_WEST_SCALING = config.getfloat("DriveParameters","ns_west_scaling")
 NS_EAST_SCALING = config.getfloat("DriveParameters","ns_east_scaling")
 NS_TILT_ZERO = config.getfloat("DriveParameters","ns_tilt_zero")
-
+FAST = 0
+SLOW = 1
+NORTH_OR_WEST = 0
+SOUTH_OR_EAST = 1
 
 class eZ80NSError(Exception):
     """Generic exception returned from eZ80 
@@ -34,7 +38,7 @@ class eZ80NSError(Exception):
 
     def __init__(self,code):
         message = "Exception E:%d caught from NS drive eZ80"%(code)
-        super(EZ80Error,self).__init__(message)
+        super(eZ80NSError,self).__init__(message)
         LogDB().log_tcc_status("NSDriveInterface","error",message)
 
 
@@ -49,8 +53,7 @@ class NSCountError(Exception):
     count -- the invalid requested count
     """
 
-    def __init__(self,count):
-        message = "Invalid NS count of %d requested"%count
+    def __init__(self,message):
         super(NSCountError,self).__init__(message)
         LogDB().log_tcc_status("NSDriveInterface","warning",message)
 
@@ -69,7 +72,7 @@ class NSDriveInterface(BaseDriveInterface):
     Args:
     timeout -- acceptable timeout on socket connections to the eZ80
     """
-    _state = {}
+    #_state = {}
     _node = NS_NODE_NAME
     _ip = NS_CONTROLLER_IP
     _port = NS_CONTROLLER_PORT
@@ -82,15 +85,16 @@ class NSDriveInterface(BaseDriveInterface):
         ("west_status" ,lambda x: unpack("B",x)[0],1),
         ("west_count"   ,lambda x: codec.it_unpack(x),3)]
     
-    def __new__(cls, *p, **k):
-        self = object.__new__(cls,*p, **k)
-        self.__dict__ = cls._state
-        return self
+    #def __new__(cls, *p, **k):
+    #    self = object.__new__(cls,*p, **k)
+    #    self.__dict__ = cls._state
+    #    return self
 
     def __init__(self,timeout=2.0):
         super(NSDriveInterface,self).__init__(timeout)
         self.active_thread = None
         self.event = Event()
+        self.status_dict = {}
 
     def _stop_active_drive(self):
         """Stop active drive thread without requesting telescope stop.
@@ -102,11 +106,11 @@ class NSDriveInterface(BaseDriveInterface):
         """
 
         self.event.set()
-        while self.active_thread.is_alive():
-            sleep(0.2)
-        self.active_thread.join()
+        if self.active_thread:
+            self.active_thread.join()
         self.active_thread = None
         self.event.clear()
+        self._close_client()
 
     def _drive_thread(self):
         """A thread to handle the eZ80 status loop while driving.
@@ -119,7 +123,7 @@ class NSDriveInterface(BaseDriveInterface):
         try:
             while not self.event.is_set():
                 code,response = self._parse_message(*self._receive_message())
-                if (code == "S") and (response == 0):
+                if (code == "I") and (response == 0):
                     break
         except eZ80NSError as e:
             raise e
@@ -142,6 +146,7 @@ class NSDriveInterface(BaseDriveInterface):
             code,response = self._parse_message(*self._receive_message())
             if (code == "S") and (response == 0):
                 self.active_thread = Thread(target=self._drive_thread)
+                self.active_thread.daemon = True
                 self.active_thread.start()
                 break
 
@@ -259,7 +264,7 @@ class NSDriveInterface(BaseDriveInterface):
 
         if west_counts is not None:
             west_offset = west_counts - status["west_count"]
-            west_dir = NORTH_OR_WEST if west_offset >= 0 else NORTH_OR_WEST
+            west_dir = NORTH_OR_WEST if west_offset >= 0 else SOUTH_OR_EAST
             if abs(west_offset) <= 40:
                 west_speed = None
             elif abs(west_offset) <= 400 or force_west_slow:
@@ -299,7 +304,7 @@ class NSDriveInterface(BaseDriveInterface):
         ed,wd,es,ws = self._prepare(east_count,west_count,force_east_slow,force_west_slow)
         if es is None or ws is None:
             # if neither arm will move more than 40 counts              
-            raise InvalidCounts("E and W arm requested move of less than 40 counts")
+            raise NSCountError("E or W arm requested move of less than 40 counts")
         elif ws is None:
             # if only east arm is to move 
             self.set_east_tilt_from_counts(east_count,force_east_slow)
@@ -339,7 +344,7 @@ class NSDriveInterface(BaseDriveInterface):
     def set_west_tilt_from_counts(self,west_count,force_slow=False):
         """Set tilt of west arm base on encoder counts."""
         drive_code = "3"
-        data = codec.it_pack(west_count)
+        encoded_count = codec.it_pack(west_count)
         _,wd,_,ws = self._prepare(None,west_count,None,force_slow)
         if ws is None:
             raise InvalidCounts("W arm requested move of less than 40 counts")

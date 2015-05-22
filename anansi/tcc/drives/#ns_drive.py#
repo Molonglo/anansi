@@ -146,7 +146,6 @@ class NSDriveInterface(BaseDriveInterface):
             code,response = self._parse_message(*self._receive_message())
             if (code == "S") and (response == 0):
                 self.active_thread = Thread(target=self._drive_thread)
-                self.active_thread.daemon = True
                 self.active_thread.start()
                 break
 

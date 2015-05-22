@@ -17,10 +17,12 @@ class BaseDriveInterface(object):
         self.header_decoder = decoder
         self.header_size = size
         self.log = LogDB()
+
+        #def __del__(self):
+        #self._close_client()
+        #self.client = None
+
             
-    def __del__(self):
-        del self.client
-        
     def _open_client(self):
         if self.client is None:
             try:
@@ -50,5 +52,10 @@ class BaseDriveInterface(object):
         self.client.send(header)
         if len(msg)>0:
             self.client.send(msg)
-        self.log.log_eZ80_command(code,data)
+        
+        if data:
+            data_repr = unpack("B"*len(data),data)
+            self.log.log_eZ80_command(code,str(data_repr))
+        else:
+            self.log.log_eZ80_command(code,"None")
 

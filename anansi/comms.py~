@@ -59,7 +59,6 @@ class BaseConnection(object):
                 self.sock.close()
             except Exception as error:
                 logging.warning(error)
-            self.sock = None
 
 #####################
 # TCP related
