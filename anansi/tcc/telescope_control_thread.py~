@@ -65,15 +65,7 @@ class TelescopeController(object):
     def disable_west_arm(self):
         self.ns_drive.disable_west_arm()
         self.md_drive.disable_west_arm()
-        
-    def enable_east_arm(self):
-        self.ns_drive.enable_east_arm()
-        self.md_drive.enable_east_arm()
 
-    def enable_west_arm(self):
-        self.ns_drive.enable_west_arm()
-        self.md_drive.enable_west_arm()
-        
     def stop(self,command):
         self.log.log_tcc_status("TelescopeController.stop", "info",
                                 "Stop requested for both NS & MD drives")

@@ -58,16 +58,11 @@ class NSCountError(Exception):
         LogDB().log_tcc_status("NSDriveInterface","warning",message)
 
 
-#Borg
 class NSDriveInterface(BaseDriveInterface):
     """Interface to eZ80 controlling Molonglo NS drives.
 
     Notes: Key configuration parameters will be found in the 
     anansi.cfg configuration file for this interface.
-
-    IMPORTANT: This is a Borg class meaning that all instances share state.
-    This stops potential cross talk between multiple instances in the same 
-    process.
 
     Args:
     timeout -- acceptable timeout on socket connections to the eZ80
@@ -85,17 +80,12 @@ class NSDriveInterface(BaseDriveInterface):
         ("west_status" ,lambda x: unpack("B",x)[0],1),
         ("west_count"   ,lambda x: codec.it_unpack(x),3)]
     
-    #def __new__(cls, *p, **k):
-    #    self = object.__new__(cls,*p, **k)
-    #    self.__dict__ = cls._state
-    #    return self
-
-    def __init__(self,timeout=2.0):
-        super(NSDriveInterface,self).__init__(timeout)
+    def __init__(self,timeout=2.0,east_disabled=False,west_disabled=False):
+        super(NSDriveInterface,self).__init__(timeout,east_disabled,west_disabled)
         self.active_thread = None
         self.event = Event()
         self.status_dict = {}
-
+        
     def _stop_active_drive(self):
         """Stop active drive thread without requesting telescope stop.
 
@@ -104,7 +94,6 @@ class NSDriveInterface(BaseDriveInterface):
         Need to think about what this means to the eZ80 and if
         this should include and explicit stop command.
         """
-
         self.event.set()
         if self.active_thread:
             self.active_thread.join()
@@ -205,7 +194,6 @@ class NSDriveInterface(BaseDriveInterface):
         
         Returns: Status dictionary
         """
-
         if not self.active_thread:
             self._open_client()
             self._send_message("U",None)
@@ -293,8 +281,16 @@ class NSDriveInterface(BaseDriveInterface):
     def set_tilts(self,east_tilt,west_tilt,
                   force_east_slow=False,force_west_slow=False):
         """Set the tilts of the E and W arm NS drives."""
-        east_count,west_count = self.tilts_to_counts(east_tilt,west_tilt)
-        self.set_tilts_from_counts(east_count,west_count,force_east_slow,force_west_slow)
+        if self.west_disabled and self.east_disabled:
+            return
+        elif self.west_disabled:
+            self.set_east_tilt(east_tilt,force_east_slow)
+        elif self.east_disabled:
+            self.set_west_tilt(east_tilt,force_east_slow)
+        else:
+            east_count,west_count = self.tilts_to_counts(east_tilt,west_tilt)
+            self.set_tilts_from_counts(east_count,west_count,
+                                       force_east_slow,force_west_slow)
         
     def set_tilts_from_counts(self,east_count,west_count,
                               force_east_slow=False,force_west_slow=False):
@@ -320,8 +316,11 @@ class NSDriveInterface(BaseDriveInterface):
         
     def set_east_tilt(self,east_tilt,force_slow=False):
         """Set tilt of east arm."""
-        east_count,_ = self.tilts_to_counts(east_tilt,0)
-        self.set_east_tilt_from_counts(east_count,force_slow)
+        if self.east_disabled:
+            return
+        else:
+            east_count,_ = self.tilts_to_counts(east_tilt,0)
+            self.set_east_tilt_from_counts(east_count,force_slow)
 
     def set_east_tilt_from_counts(self,east_count,force_slow=False):
         """Set tilt of east arm base on encoder counts."""
@@ -338,8 +337,11 @@ class NSDriveInterface(BaseDriveInterface):
 
     def set_west_tilt(self,west_tilt,force_slow=False):
         """Set tilt of west arm."""
-        _,west_count = self.tilts_to_counts(0,west_tilt)
-        self.set_west_tilt_from_counts(west_count,force_slow)
+        if self.west_disabled:
+            return
+        else:
+            _,west_count = self.tilts_to_counts(0,west_tilt)
+            self.set_west_tilt_from_counts(west_count,force_slow)
 
     def set_west_tilt_from_counts(self,west_count,force_slow=False):
         """Set tilt of west arm base on encoder counts."""

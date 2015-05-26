@@ -12,40 +12,121 @@ import logging
 from lxml import etree
 from anansi.utils import gen_xml_element
 
-class TelescopeController(Thread):
-    def __init__(self, coordinates, kill_event, DriveClass):
-        self.logger = logging.getLogger(self.__class__.__name__)
-        self.logger.info("Creating TelescopeController instance")
-        self.tracking_enabled = False
-        self.on_target = False
-        self.drive = DriveClass(timeout=0.5)
-        self.coordinates = coordinates
+from anansi.logging_db import MolongloLoggingDataBase as LogDB
+from anansi.tcc.drives.ns_drive import NSDriveInterface
+from anansi.tcc.drives.ns_drive_dummy import MDDriveInterface
+
+WIND_STOW_NSEW = (0.0,0.0)              
+MAINTENANCE_STOW_NSEW = (d2r(45.0),0.0) 
+
+class Track(Thread):
+    def __init__(self, ns_drive, md_drive, coordinates, update=2.0):
+        self.ns_drive = ns_drive
+        self.md_drive = md_drive
+        self.coords = coords
+        self._stop = Event()
+        self.update_cycle = update
+        self.log.log_tcc_status("Track", "info",
+                                "Setting up track on object %s"%repr(self.coords))
         Thread.__init__(self)
 
-    def stop(self):
-        self.logger.info("Stop requested")
-        
-        # request stop
-        
-        # send updated positions to broadcast server
-        
-    def track(self):
-        self.logger.info("Track requested")
+    def run(self):
+        while not self._stop.is_set():
+            self.log.log_tcc_status("Track", "info",
+                                    "Updating positions for track")
+            ns,ew = self.coords.predict()
+            self.ns_drive.set_tilts(ns,ns)
+            self.md_drive.set_tilts(ew,ew)
+            sleep(self.update_cycle)
 
-        while not kill_event.is_set():
-            
-            # predict new nsew position
-            
-            # request move
-            
-            # send updated positions to broadcast server
-            
-            # reloop
+    def end(self):
+        self.log.log_tcc_status("Track", "info",
+                                "Ending track and stopping drives")
+        self.event.set()
+        self.ns_drive.stop()
+        self.md_drive.stop()
 
-    def set_nsew(self):
-        self.logger.info("Setting drive positions")
+
+class TelescopeController(object):
+    def __init__(self,east_disabled=False,west_disabled=False):
+        self.log = LogDB()
+        self.log.log_tcc_status("TelescopeController", "info",
+                                "Spawning telescope controller thread")
+        self.current_track = None
+        self.ns_drive = NSDriveInterface(east_disabled=east_disabled,
+                                         west_disabled=west_disabled)
+        self.md_drive = MDDriveInterface(east_disabled=east_disabled,
+                                         west_disabled=west_disabled)
+
+    def disable_east_arm(self):
+        self.ns_drive.disable_east_arm()
+        self.md_drive.disable_east_arm()
+
+    def disable_west_arm(self):
+        self.ns_drive.disable_west_arm()
+        self.md_drive.disable_west_arm()
         
-        # request move 
+    def enable_east_arm(self):
+        self.ns_drive.enable_east_arm()
+        self.md_drive.enable_east_arm()
+
+    def enable_west_arm(self):
+        self.ns_drive.enable_west_arm()
+        self.md_drive.enable_west_arm()
         
-        # send updated positions to broadcast server
+    def stop(self,command):
+        self.log.log_tcc_status("TelescopeController.stop", "info",
+                                "Stop requested for both NS & MD drives")
+        self.ns_drive.stop()
+        self.md_drive.stop()
+        
+    def track(self,coordinates):
+        self.end_current_track()
+        self.current_track = Track(self.ns_drive,self.md_drive,coordinates)
+        self.current_track.start()
+        
+    def end_current_track(self):
+        if self.current_track:
+            self.log.log_tcc_status(
+                    "TelescopeController.end_current_track",
+                    "info", "Stopping current track")
+            try:
+                self.current_track.end()
+                self.current_track.join()
+            except Exception as error:
+                self.log.log_tcc_status(
+                    "TelescopeController.end_current_track", 
+                    "warning", str(error))
+            finally:
+                self.current_track = None
+    
+    def _drive_to(self,ns,ew):
+        self.log.log_tcc_status(
+            "TelescopeController._drive_to",
+            "info", "Sending telescope to NS: %.5f rads EW: %.5 rads"%(ns,ew))
+        self.ns_drive.set_tilts(ns,ns)
+        self.md_drive.set_tilts(ew,ew)
+
+    def drive_to(self,coordinates):
+        self.end_current_track()
+        ns,ew = self.coordinates.get_nsew()
+        self.log.log_tcc_status(
+            "TelescopeController.drive_to",
+            "info", "Sending telescope to coordinates: %s"%repr(coordinates))
+        self._drive_to(ns,ew)
+
+    def wind_stow(self):
+        self.end_current_track()
+        self.log.log_tcc_status(
+            "TelescopeController.wind_stow",
+            "info", "Sending telescope to wind stow")
+        self._drive_to(*WIND_STOW_NSEW)
+        
+    def maintenance_stow(self):
+        self.end_current_track()
+        self.log.log_tcc_status(
+            "TelescopeController.maintenance_stow",
+            "info", "Sending telescope to maintenance stow")
+        self._drive_to(*MAINTENANCE_STOW_NSEW)
+
     

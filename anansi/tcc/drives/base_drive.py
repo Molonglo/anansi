@@ -16,13 +16,22 @@ class BaseDriveInterface(object):
         decoder,size = codec.gen_header_decoder(self._node)
         self.header_decoder = decoder
         self.header_size = size
+        self.west_disabled = False
+        self.east_disabled = False
         self.log = LogDB()
 
-        #def __del__(self):
-        #self._close_client()
-        #self.client = None
+    def disable_east_arm(self):
+        self.east_disabled = True
+        
+    def disable_west_arm(self):
+        self.west_disabled = True
+        
+    def enable_east_arm(self):
+        self.east_disabled = False
+        
+    def enable_west_arm(self):
+        self.west_disabled = False
 
-            
     def _open_client(self):
         if self.client is None:
             try:

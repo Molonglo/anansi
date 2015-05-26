@@ -1,11 +1,11 @@
 from threading import Thread,Event
 from Queue import Queue
+from comms import TCPServer
+from coordinates import Coordinates
 from time import sleep
 from lxml import etree
 from ConfigParser import ConfigParser
-
-from anansi.comms import TCPServer
-from anansi.tcc.coordinates import Coordinates
+from anansi.
 from anansi.tcc.telescope_controller import TelescopeController
 from anansi.logging_db import MolongloLoggingDataBase as LogDB
 
