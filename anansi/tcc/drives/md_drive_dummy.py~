@@ -81,11 +81,13 @@ class MDDriveInterface(BaseDriveInterface):
         ("west_count"   ,lambda x: codec.it_unpack(x),3)]
     
 
-    def __init__(self,timeout=2.0):
+    def __init__(self,timeout=2.0,east_disabled=False,west_disabled=False):
         super(MDDriveInterface,self).__init__(timeout)
         self.active_thread = None
         self.event = Event()
         self.status_dict = {}
+        self.east_disabled = east_disabled
+        self.west_disabled = west_disabled):
 
     def get_status(self):
         return self.status_dict

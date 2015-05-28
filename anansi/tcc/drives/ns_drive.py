@@ -1,5 +1,6 @@
 from anansi.logging_db import MolongloLoggingDataBase as LogDB
 from anansi.tcc.drives.base_drive import BaseDriveInterface
+from anansi import exit_funcs
 from threading import Thread,Event
 from Queue import Queue
 from multiprocessing import Manager
@@ -67,7 +68,6 @@ class NSDriveInterface(BaseDriveInterface):
     Args:
     timeout -- acceptable timeout on socket connections to the eZ80
     """
-    #_state = {}
     _node = NS_NODE_NAME
     _ip = NS_CONTROLLER_IP
     _port = NS_CONTROLLER_PORT
@@ -80,11 +80,20 @@ class NSDriveInterface(BaseDriveInterface):
         ("west_status" ,lambda x: unpack("B",x)[0],1),
         ("west_count"   ,lambda x: codec.it_unpack(x),3)]
     
-    def __init__(self,timeout=2.0,east_disabled=False,west_disabled=False):
-        super(NSDriveInterface,self).__init__(timeout,east_disabled,west_disabled)
+    def __init__(self,timeout=2.0):
+        super(NSDriveInterface,self).__init__(timeout)
         self.active_thread = None
         self.event = Event()
         self.status_dict = {}
+        exit_funcs.register(self._clean_up)
+
+    def _clean_up(self):
+        self._stop_active_drive()
+        self.stop()
+        self.__del__()
+        
+    def __del__(self):
+        exit_funcs.deregister(self._clean_up)
         
     def _stop_active_drive(self):
         """Stop active drive thread without requesting telescope stop.
