@@ -21,10 +21,7 @@ class BaseConnection(object):
         super(BaseConnection,self).__init__()
         self.ip = ip
         self.port = port
-        
         self.sock = socket.socket(sock_family,sock_type)
-
-
         self.sock.settimeout(2)
         
     def connect(self):
@@ -32,8 +29,6 @@ class BaseConnection(object):
             self.sock.connect((self.ip, self.port))
         except Exception as error:
             raise SocketError(self,error)
-
-
 
     def bind(self):
         if self.sock is not None:
@@ -84,7 +79,8 @@ class QueueHandler(BaseHandler):
         self.logger.debug('received %d byte data packet'%(len(data)))
         self.server.recv_q.put(data)
         response = None
-        while not self.server.stop:
+        while not self.server.stop.is_set():
+            print "Handling"
             try:
                 response = self.server.send_q.get(timeout=1.0)
             except:
@@ -105,7 +101,7 @@ class TCPServer(SocketServer.TCPServer):
         self.client_address = None
         self.ip = ip
         self.port = port
-        self.stop = False
+        self.stop = Event()
         SocketServer.TCPServer.__init__(self, (ip, port), handler_class,bind_and_activate=False)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server_bind()
@@ -113,8 +109,10 @@ class TCPServer(SocketServer.TCPServer):
         self.logger.debug('TCP server bound and listening on (%s,%d)'%(self.ip,self.port))
 
     def shutdown(self):
-        self.stop = True
+        self.stop.set()
+        print "Shutting down"
         SocketServer.TCPServer.shutdown(self)
+        print "Done"
 
     def __del__(self):
         self.server_close()

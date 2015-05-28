@@ -59,19 +59,24 @@ class TCCMessage(object):
         self.root.append(elem)
 
 class TCCUser(object):
-    def send(self,msg,ip=ANANSI_SERVER_IP,port=ANANSI_SERVER_PORT):
+    def send(self,msg,ip=ANANSI_SERVER_IP,port=ANANSI_SERVER_PORT,recv=True):
         client = TCPClient(ip,port)
         client.send(msg)
-        response = client.receive()
+        if recv:
+            response = client.receive()
+        else:
+            response = None
         del client
         return response
+        
+
 
 def shutdown():
     msg = TCCMessage("ebarr")
     msg.server_command("shutdown")
     print repr(msg)
     client = TCCUser()
-    print client.send(str(msg))
+    client.send(str(msg),recv=False)
 
 def point(x,y,system="equatorial",tracking="on",east_arm="enabled",west_arm="enabled"):
     msg = TCCMessage("ebarr")
@@ -84,6 +89,7 @@ def point(x,y,system="equatorial",tracking="on",east_arm="enabled",west_arm="ena
 if __name__ == "__main__":
     import ephem as e
     eq = e.Equatorial("00:00:00.00","-45:10:34.8751")
-    point(float(eq.ra),float(eq.dec),
-          system="equatorial_ha",tracking="off",
-          east_arm="enabled",west_arm="disabled")
+    #point(float(eq.ra),float(eq.dec),
+    #      system="equatorial_ha",tracking="off",
+    #x      east_arm="enabled",west_arm="disabled")
+    shutdown()

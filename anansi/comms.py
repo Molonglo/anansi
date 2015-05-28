@@ -79,7 +79,7 @@ class QueueHandler(BaseHandler):
         self.logger.debug('received %d byte data packet'%(len(data)))
         self.server.recv_q.put(data)
         response = None
-        while not self.server.stop:
+        while not self.server.stop.is_set():
             try:
                 response = self.server.send_q.get(timeout=1.0)
             except:
@@ -100,7 +100,7 @@ class TCPServer(SocketServer.TCPServer):
         self.client_address = None
         self.ip = ip
         self.port = port
-        self.stop = False
+        self.stop = Event()
         SocketServer.TCPServer.__init__(self, (ip, port), handler_class,bind_and_activate=False)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server_bind()
@@ -108,7 +108,7 @@ class TCPServer(SocketServer.TCPServer):
         self.logger.debug('TCP server bound and listening on (%s,%d)'%(self.ip,self.port))
 
     def shutdown(self):
-        self.stop = True
+        self.stop.set()
         SocketServer.TCPServer.shutdown(self)
 
     def __del__(self):

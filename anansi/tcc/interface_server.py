@@ -97,8 +97,9 @@ class TCCServer(Thread):
     def shutdown(self):
         self._shutdown.set()
         self.server.shutdown()
+        self.server_thread.join()
         exit_funcs.deregister(self.shutdown)
-            
+
     def parse_message(self,msg):
         self.log.log_tcc_status("TCCServer.parse_message","info",msg)
 
@@ -111,24 +112,26 @@ class TCCServer(Thread):
                 self.log.log_tcc_status("TCCServer.parse_message","info",
                                         "Received shutdown message")
                 self.shutdown()
-        
-            if request.east_arm_active:
-                self.log.log_tcc_status("TCCServer.parse_message","info",
-                                        "Enabling east arm")
-                self.controller.enable_east_arm()
-            else:
-                self.log.log_tcc_status("TCCServer.parse_message","info",
-                                        "Disabling east arm")
-                self.controller.disable_east_arm()
-            
-            if request.west_arm_active:
-                self.log.log_tcc_status("TCCServer.parse_message","info",
-                                        "Enabling west arm")
-                self.controller.enable_west_arm()
-            else:
-                self.log.log_tcc_status("TCCServer.parse_message","info",
-                                        "Disabling west arm")
-                self.controller.disable_west_arm()
+                return
+
+            if request.tcc_command:
+                if request.east_arm_active:
+                    self.log.log_tcc_status("TCCServer.parse_message","info",
+                                            "Enabling east arm")
+                    self.controller.enable_east_arm()
+                else:
+                    self.log.log_tcc_status("TCCServer.parse_message","info",
+                                            "Disabling east arm")
+                    self.controller.disable_east_arm()
+                    
+                if request.west_arm_active:
+                    self.log.log_tcc_status("TCCServer.parse_message","info",
+                                            "Enabling west arm")
+                    self.controller.enable_west_arm()
+                else:
+                    self.log.log_tcc_status("TCCServer.parse_message","info",
+                                            "Disabling west arm")
+                    self.controller.disable_west_arm()
 
             if request.tcc_command == "point":
                 info = request.tcc_info
@@ -183,7 +186,8 @@ class TCCServer(Thread):
             self.server.send_q.put(str(response))
            
 if __name__ == "__main__":
-    x = TCCServer()
-    x.start()
-    while True:
+    server = TCCServer()
+    server.start()
+    while not server._shutdown.is_set():
         sleep(1.0)
+    server.join()
