@@ -14,7 +14,7 @@ from anansi.utils import gen_xml_element
 
 from anansi.logging_db import MolongloLoggingDataBase as LogDB
 from anansi.tcc.drives.ns_drive import NSDriveInterface
-from anansi.tcc.drives.ns_drive_dummy import MDDriveInterface
+from anansi.tcc.drives.md_drive_dummy import MDDriveInterface
 
 WIND_STOW_NSEW = (0.0,0.0)              
 MAINTENANCE_STOW_NSEW = (d2r(45.0),0.0) 
@@ -53,10 +53,8 @@ class TelescopeController(object):
         self.log.log_tcc_status("TelescopeController", "info",
                                 "Spawning telescope controller thread")
         self.current_track = None
-        self.ns_drive = NSDriveInterface(east_disabled=east_disabled,
-                                         west_disabled=west_disabled)
-        self.md_drive = MDDriveInterface(east_disabled=east_disabled,
-                                         west_disabled=west_disabled)
+        self.ns_drive = NSDriveInterface()
+        self.md_drive = MDDriveInterface()
 
     def disable_east_arm(self):
         self.ns_drive.disable_east_arm()
@@ -74,7 +72,7 @@ class TelescopeController(object):
         self.ns_drive.enable_west_arm()
         self.md_drive.enable_west_arm()
         
-    def stop(self,command):
+    def stop(self):
         self.log.log_tcc_status("TelescopeController.stop", "info",
                                 "Stop requested for both NS & MD drives")
         self.ns_drive.stop()

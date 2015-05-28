@@ -87,7 +87,7 @@ class MDDriveInterface(BaseDriveInterface):
         self.event = Event()
         self.status_dict = {}
         self.east_disabled = east_disabled
-        self.west_disabled = west_disabled):
+        self.west_disabled = west_disabled
 
 
     def get_status(self):

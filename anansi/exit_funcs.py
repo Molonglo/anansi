@@ -10,8 +10,13 @@ log = LogDB()
 def callback(signum,frame):
     log.log_tcc_status("exit_funcs.callback","debug",
                        "Caught signal %d, running callbacks"%signum)
-    for func,args,kwargs in _CALLBACKS:
-        func(*args,**kwargs)
+    while _CALLBACKS:
+        try:
+            func,args,kwargs = _CALLBACKS.pop()
+            func(*args,**kwargs)
+        except Exception as error:
+            log.log_tcc_status("exit_funcs.callback","error",
+                               str(error))
     sys.exit(0)
 
 def register(func,*args,**kwargs):
@@ -23,7 +28,7 @@ def deregister(func,*args,**kwargs):
     log.log_tcc_status("exit_funcs.deregister","debug",
                        "Deregistering %s"%(str((func,args,kwargs))))
     try:
-        x.remove((func,args,kwargs))
+        _CALLBACKS.remove((func,args,kwargs))
     except ValueError:
         pass
     

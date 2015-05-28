@@ -53,10 +53,8 @@ class TelescopeController(object):
         self.log.log_tcc_status("TelescopeController", "info",
                                 "Spawning telescope controller thread")
         self.current_track = None
-        self.ns_drive = NSDriveInterface(east_disabled=east_disabled,
-                                         west_disabled=west_disabled)
-        self.md_drive = MDDriveInterface(east_disabled=east_disabled,
-                                         west_disabled=west_disabled)
+        self.ns_drive = NSDriveInterface()
+        self.md_drive = MDDriveInterface()
 
     def disable_east_arm(self):
         self.ns_drive.disable_east_arm()
@@ -74,7 +72,7 @@ class TelescopeController(object):
         self.ns_drive.enable_west_arm()
         self.md_drive.enable_west_arm()
         
-    def stop(self,command):
+    def stop(self):
         self.log.log_tcc_status("TelescopeController.stop", "info",
                                 "Stop requested for both NS & MD drives")
         self.ns_drive.stop()
@@ -109,7 +107,7 @@ class TelescopeController(object):
 
     def drive_to(self,coordinates):
         self.end_current_track()
-        ns,ew = self.coordinates.get_nsew()
+        ns,ew = coordinates.get_nsew()
         self.log.log_tcc_status(
             "TelescopeController.drive_to",
             "info", "Sending telescope to coordinates: %s"%repr(coordinates))

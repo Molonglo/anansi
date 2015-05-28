@@ -9,6 +9,7 @@ config.read(os.path.join(config_path,"logging_db.cfg"))
 USER   = config.get("Login","user")
 PASSWD = config.get("Login","password")
 HOST   = config.get("Login","host")
+PORT   = config.getint("Login","port")
 NAME   = config.get("Login","name")
 
 class BaseDBManager(object):
@@ -110,13 +111,28 @@ class MolongloLoggingDataBase(BaseDBManager):
     __HOST = HOST
     __NAME = NAME
     __USER = USER
+    __PORT = PORT
     __PASSWD = PASSWD
     def __init__(self):
         super(MolongloLoggingDataBase,self).__init__()
+        try:
+            self.connect()
+        except Exception as error:
+            self.connected = False
+            warnings.warn(str(error))
+        else:
+            self.connected = True
+    
+    def execute_insert(self,query):
+        if self.connected:
+            super(MolongloLoggingDataBase,self).execute_insert(query)
+        else:
+            print query
 
     def connect(self):
         return MySQLdb.connect(
             host=self.__HOST,
+            port=self.__PORT,
             db=self.__NAME,
             user=self.__USER,
             passwd=self.__PASSWD)

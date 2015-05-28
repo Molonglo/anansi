@@ -21,22 +21,14 @@ class BaseConnection(object):
         super(BaseConnection,self).__init__()
         self.ip = ip
         self.port = port
-        
-        print "MAKING SOCKET"
         self.sock = socket.socket(sock_family,sock_type)
-        print "I AM SOCKET:",self.sock.fileno()
-
-
         self.sock.settimeout(2)
         
     def connect(self):
         try:
             self.sock.connect((self.ip, self.port))
         except Exception as error:
-            print "SOCKET COULD NOT CONNECT:",self.sock.fileno()
             raise SocketError(self,error)
-        print "I connected to",self.ip,self.port
-
 
     def bind(self):
         if self.sock is not None:
@@ -50,7 +42,7 @@ class BaseConnection(object):
 
     def __del__(self):
         if self.sock is not None:
-            print "I AM DELETING SOCKET:",self.sock,self.sock.fileno()
+
             try:
                 self.sock.shutdown(socket.SHUT_RDWR)
             except Exception as error:

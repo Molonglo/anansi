@@ -1,6 +1,5 @@
-import ns_drive as ns
+from ns_drive import NSDriveInterface
 
-x = ns.NSDriveInterface()
-x.get_status()
-x.set_tilts_from_counts(26000,46000)
-
+x = NSDriveInterface()
+x.clean_up()
+del x

@@ -55,11 +55,9 @@ class Coordinates(eph.FixedBody):
             self._dec = coords.dec
 
         if system == "equatorial_ha":
-            print x,y
             coords = eph.Equatorial(x,y)
             observatory = Molonglo(date,self.epoch)
             self.ha = coords.ra
-            print self.ha
             self._ra  = observatory.sidereal_time() - self.ha
             self._dec = coords.dec
 
@@ -86,7 +84,6 @@ class Coordinates(eph.FixedBody):
             self.ew = y
 
         self._compute(date=date)
-        print self.ha
 
     def _compute(self,date=None):
         if self.system == "nsew":
