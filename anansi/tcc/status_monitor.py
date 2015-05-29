@@ -15,9 +15,12 @@ STATUS_PORT = config.getint("IPAddresses","status_port")
 def is_on_target(xml):
     return bool(xml.find("overview").find("on_target").text)
 
-
-client = TCPClient(STATUS_IP,STATUS_PORT)
-client.send("234353534")
+client = TCPClient(STATUS_IP,STATUS_PORT,timeout=10.0)
 xml = client.receive()
-xml = etree.fromstring(xml)
-print etree.tostring(xml,pretty_print=True)
+#print xml
+
+try:
+    xml = etree.fromstring(xml)
+    print etree.tostring(xml,pretty_print=True)
+except:
+    print xml

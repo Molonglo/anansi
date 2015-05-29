@@ -58,6 +58,10 @@ class TelescopeController(object):
         self.ns_drive = NSDriveInterface()
         self.md_drive = MDDriveInterface()
 
+    def clean_up(self):
+        self.ns_drive.clean_up()
+        self.md_drive.clean_up()
+
     def disable_east_arm(self):
         self.ns_drive.disable_east_arm()
         self.md_drive.disable_east_arm()

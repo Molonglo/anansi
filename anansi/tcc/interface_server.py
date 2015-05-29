@@ -1,11 +1,11 @@
-from threading import Thread,Event
+from threading import Thread,Event,Timer
 from Queue import Queue
 from time import sleep
 from lxml import etree
 from ConfigParser import ConfigParser
 import os
 from anansi import exit_funcs
-from anansi.comms import TCPServer
+from anansi.comms import TCPServer,BaseHandler
 from anansi.tcc.coordinates import Coordinates
 from anansi.tcc.telescope_controller import TelescopeController
 from anansi.logging_db import MolongloLoggingDataBase as LogDB
@@ -34,6 +34,7 @@ class TCCResponse(object):
         node.text = message
         self.msg.append(node)
 
+
 class TCCRequest(object):
     def __init__(self,xml_string):
         self.server_command = None
@@ -46,9 +47,6 @@ class TCCRequest(object):
         self.msg = etree.fromstring(xml_string)
         self.parse_server_commands()
         self.parse_tcc_commands()
-
-    def parse_arms_status(self):
-        arm_status = self.msg.find("server_command")
 
     def parse_server_commands(self):
         server_cmds = self.msg.find("server_command")
@@ -80,42 +78,44 @@ class TCCRequest(object):
                     self.east_arm_active = False
                 if west_status == "disabled":
                     self.west_arm_active = False
-                            
-            
-class TCCServer(Thread):
-    def __init__(self):
-        Thread.__init__(self)
-        exit_funcs.register(self.shutdown)
-        self.server  = TCPServer(ANANSI_SERVER_IP,ANANSI_SERVER_PORT)
-        self.server_thread = Thread(target=self.server.serve_forever)
-        self.server_thread.daemon = True
-        self.server_thread.start()
-        self.controller = TelescopeController()
-        self._shutdown = Event()
-        self.log = LogDB()
 
-    def shutdown(self):
-        self._shutdown.set()
-        self.server.shutdown()
-        self.server_thread.join()
-        self.controller.clean_up()
-        exit_funcs.deregister(self.shutdown)
+
+
+
+class TCCRequestHandler(BaseHandler):
+    def handle(self):
+        msg = self.recvall()
+        response = self.server.parse_message(msg)
+        self.request.send(str(response))
+        if self.server.shutdown_requested.is_set():
+            self.server.shutdown()
+        
+
+class TCCServer(TCPServer):
+    def __init__(self,ip,port):
+        TCPServer.__init__(self,ip,port,handler_class=TCCRequestHandler)
+        self.controller = TelescopeController()
+        self.shutdown_requested = Event()
+        self.log = LogDB()
 
     def parse_message(self,msg):
         self.log.log_tcc_status("TCCServer.parse_message","info",msg)
-
         response = TCCResponse()
-
         try:
             request = TCCRequest(msg)
-        
+            
+            if not request.server_command or request.tcc_command:
+                raise Exception("No valid command given")
+
             if request.server_command == "shutdown":
                 self.log.log_tcc_status("TCCServer.parse_message","info",
                                         "Received shutdown message")
-                self.shutdown()
-                return
-
+                self.shutdown_requested.set()
+            else:
+                raise Exception("Unknown server command")
+                
             if request.tcc_command:
+                print "I have tcc command"
                 if request.east_arm_active:
                     self.log.log_tcc_status("TCCServer.parse_message","info",
                                             "Enabling east arm")
@@ -134,37 +134,37 @@ class TCCServer(Thread):
                                             "Disabling west arm")
                     self.controller.disable_west_arm()
 
-            if request.tcc_command == "point":
-                info = request.tcc_info
-                self.log.log_tcc_status("TCCServer.parse_message","info",
-                                        "Received pointing command: %s"%repr(info))
-                coords = Coordinates(info["x"],info["y"],system=info["system"],
-                                     units=info["units"],epoch=info["epoch"])
-                if info["tracking"]:
+                if request.tcc_command == "point":
+                    info = request.tcc_info
                     self.log.log_tcc_status("TCCServer.parse_message","info",
-                                            "Requesting source track")
-                    self.controller.track(coords)
+                                            "Received pointing command: %s"%repr(info))
+                    coords = Coordinates(info["x"],info["y"],system=info["system"],
+                                         units=info["units"],epoch=info["epoch"])
+                    if info["tracking"]:
+                        self.log.log_tcc_status("TCCServer.parse_message","info",
+                                                "Requesting source track")
+                        self.controller.track(coords)
+                    else:
+                        self.log.log_tcc_status("TCCServer.parse_message","info",
+                                                "Requesting drive to source")
+                        self.controller.drive_to(coords)
+
+                elif request.tcc_command == "wind_stow":
+                    self.log.log_tcc_status("TCCServer.parse_message","info",
+                                            "Recieved wind stow command")
+                    self.controller.wind_stow()
+                    
+                elif request.tcc_command == "maintenance_stow":
+                    self.log.log_tcc_status("TCCServer.parse_message","info",
+                                            "Recieved maintenance stow command")
+                    self.controller.maintenance_stow()
+                    
+                elif request.tcc_command == "stop":
+                    self.log.log_tcc_status("TCCServer.parse_message","info",
+                                            "Recieved stop command")
+                    self.controller.stop()
                 else:
-                    self.log.log_tcc_status("TCCServer.parse_message","info",
-                                            "Requesting drive to source")
-                    self.controller.drive_to(coords)
-                                        
-            elif request.tcc_command == "wind_stow":
-                self.log.log_tcc_status("TCCServer.parse_message","info",
-                                        "Recieved wind stow command")
-                self.controller.wind_stow()
-                                        
-            elif request.tcc_command == "maintenance_stow":
-                self.log.log_tcc_status("TCCServer.parse_message","info",
-                                        "Recieved maintenance stow command")
-                self.controller.maintenance_stow()
-            
-            elif request.tcc_command == "stop":
-                self.log.log_tcc_status("TCCServer.parse_message","info",
-                                        "Recieved stop command")
-                self.controller.stop()
-            else:
-                raise Exception("Unknown TCC command")
+                    raise Exception("Unknown TCC command")
 
         except Exception as error:
             self.log.log_tcc_status("TCCServer.parse_message","error",str(error))
@@ -172,23 +172,9 @@ class TCCServer(Thread):
         else:
             response.success("TCC command passed")
         return response
-
-    def run(self):
-        while not self._shutdown.is_set():
-            if self.server.recv_q.empty():
-                sleep(1.0)
-                continue
-            msg = self.server.recv_q.get()
-            try:
-                response = self.parse_message(msg)
-            except Exception as error:
-                response = TCCResponse()
-                response.error(repr(error))
-            self.server.send_q.put(str(response))
            
 if __name__ == "__main__":
-    server = TCCServer()
+    server = TCCServer(ANANSI_SERVER_IP,ANANSI_SERVER_PORT)
     server.start()
-    while not server._shutdown.is_set():
+    while not server.shutdown_requested.is_set():
         sleep(1.0)
-    server.join()

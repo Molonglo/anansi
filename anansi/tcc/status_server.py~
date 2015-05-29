@@ -1,6 +1,6 @@
 import os
 from threading import Thread,Event
-from anansi.comms import TCPServer
+from anansi.comms import TCPServer,BaseHandler
 from time import sleep
 from lxml import etree
 from anansi.utils import gen_xml_element
@@ -53,45 +53,27 @@ STATUS_DICT_DEFAULTS = {
     "east_md_at_limit":False
     }
 
-class StatusServer(Thread):
-    def __init__(self,interval=1.0):
-        Thread.__init__(self)
-        exit_funcs.register(self.shutdown)
-        self.server  = TCPServer(STATUS_IP,STATUS_PORT)
-        self.server_thread = Thread(target=self.server.serve_forever)
-        self.server_thread.daemon = True
-        self.server_thread.start()
-        self._shutdown = Event()
-        self.status_dict = {}
-        self.status_dict.update(STATUS_DICT_DEFAULTS)
-        self.interval = interval
-        self.log = LogDB()
 
-    def shutdown(self):
-        self._shutdown.set()
-        self.server.shutdown()
-        self.server_thread.join()
-        del self.status_dict
-        exit_funcs.deregister(self.shutdown)
-    
-    def run(self):
-        while not self._shutdown.is_set():
-            if self.server.recv_q.empty():
-                sleep(1.0)
-                continue
-            self.server.recv_q.get()
-            msg = self.form_status_msg()
-            try:
-                response = etree.tostring(msg,encoding='ISO-8859-1')
-            except Exception as error:
-                self.server.send_q.put(str(error))
-            else:
-                self.server.send_q.put(str(response))
+class StatusRequestHandler(BaseHandler):
+    def handle(self):
+        xml = self.server.get_xml_status()
+        try:
+            response = etree.tostring(xml,encoding='ISO-8859-1')
+        except Exception as error:
+            self.request.send(str(error))
+        else:
+            self.request.send(response)
+
+
+class StatusServer(TCPServer):
+    def __init__(self,ip,port):
+        TCPServer.__init__(self,ip,port,handler_class=StatusRequestHandler)
+        self.status_dict = STATUS_DICT_DEFAULTS
 
     def _xml_from_key(self,key):
         return gen_xml_element(key,str(self.status_dict[key]))
 
-    def form_status_msg(self):
+    def get_xml_status(self):
         root = gen_xml_element("tcc_status")
         overview = gen_xml_element("overview")
         overview.append(self._xml_from_key("at_limits"))
@@ -100,7 +82,7 @@ class StatusServer(Thread):
         overview.append(self._xml_from_key("slewing"))
         overview.append(self._xml_from_key("error_string"))
         root.append(overview)
-        
+
         request = gen_xml_element("coordinates")
         request.append(self._xml_from_key("RA"))
         request.append(self._xml_from_key("Dec"))
@@ -113,7 +95,7 @@ class StatusServer(Thread):
         request.append(self._xml_from_key("MD"))
         request.append(self._xml_from_key("LMST"))
         root.append(request)
-        
+
         def _append(root,ew,nsmd):
             prefix = "%s_%s"%(ew,nsmd)
             root.append(self._xml_from_key("%s_tilt"%prefix))
@@ -143,8 +125,8 @@ class StatusServer(Thread):
         return root
 
 if __name__ == "__main__":
-    server = StatusServer()
+    server = StatusServer(STATUS_IP,STATUS_PORT)
     server.start()
-    while not server._shutdown.is_set():
+    for ii in range(5):
         sleep(1.0)
-    server.join()
+    server.shutdown()
