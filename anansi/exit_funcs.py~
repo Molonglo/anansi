@@ -11,8 +11,12 @@ def callback(signum,frame):
     log.log_tcc_status("exit_funcs.callback","debug",
                        "Caught signal %d, running callbacks"%signum)
     while _CALLBACKS:
-        func,args,kwargs = _CALLBACKS.pop()
-        func(*args,**kwargs)
+        try:
+            func,args,kwargs = _CALLBACKS.pop()
+            func(*args,**kwargs)
+        except Exception as error:
+            log.log_tcc_status("exit_funcs.callback","error",
+                               str(error))
     sys.exit(0)
 
 def register(func,*args,**kwargs):

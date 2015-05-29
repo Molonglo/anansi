@@ -161,6 +161,7 @@ class MolongloLoggingDataBase(BaseDBManager):
         self.execute_insert(query)
     
     def log_tcc_status(self,sender,level,msg):
+        msg = msg.replace("'","")
         query = ("INSERT INTO Status_TCC "
                  "(location,utc,level,message) "
                  "VALUES ('%s',UTC_TIMESTAMP(),'%s','%s')")%(sender,level,msg)

@@ -98,9 +98,8 @@ class TCCServer(Thread):
         self._shutdown.set()
         self.server.shutdown()
         self.server_thread.join()
+        self.controller.clean_up()
         exit_funcs.deregister(self.shutdown)
-        print "SHUTDOWN COMPLETE"
-
 
     def parse_message(self,msg):
         self.log.log_tcc_status("TCCServer.parse_message","info",msg)

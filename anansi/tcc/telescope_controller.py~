@@ -34,7 +34,9 @@ class Track(Thread):
         while not self._stop.is_set():
             self.log.log_tcc_status("Track", "info",
                                     "Updating positions for track")
-            ns,ew = self.coords.predict()
+            self.coords.get_nsew()
+            ns = coordinates.ns
+            ew = coordinates.ew
             self.ns_drive.set_tilts(ns,ns)
             self.md_drive.set_tilts(ew,ew)
             sleep(self.update_cycle)
@@ -99,19 +101,20 @@ class TelescopeController(object):
                 self.current_track = None
     
     def _drive_to(self,ns,ew):
-        self.log.log_tcc_status(
-            "TelescopeController._drive_to",
-            "info", "Sending telescope to NS: %.5f rads EW: %.5 rads"%(ns,ew))
+        print ns,ew
+        print float(ns),float(ew)
+        self.log.log_tcc_status("TelescopeController._drive_to",
+                                "info", "Sending telescope to NS: %.5f rads EW: %.5f rads"%(ns,ew))
         self.ns_drive.set_tilts(ns,ns)
         self.md_drive.set_tilts(ew,ew)
 
     def drive_to(self,coordinates):
         self.end_current_track()
-        ns,ew = self.coordinates.get_nsew()
+        coordinates.get_nsew()
         self.log.log_tcc_status(
             "TelescopeController.drive_to",
             "info", "Sending telescope to coordinates: %s"%repr(coordinates))
-        self._drive_to(ns,ew)
+        self._drive_to(coordinates.ns,coordinates.ew)
 
     def wind_stow(self):
         self.end_current_track()

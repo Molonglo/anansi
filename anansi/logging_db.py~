@@ -123,11 +123,11 @@ class MolongloLoggingDataBase(BaseDBManager):
         else:
             self.connected = True
     
-    def execute_insert(self,*args,**kwargs):
+    def execute_insert(self,query):
         if self.connected:
-            super(MolongloLoggingDataBase,self).execute_insert(*args,**kwargs)
+            super(MolongloLoggingDataBase,self).execute_insert(query)
         else:
-            print args,kwargs
+            print query
 
     def connect(self):
         return MySQLdb.connect(
@@ -161,6 +161,7 @@ class MolongloLoggingDataBase(BaseDBManager):
         self.execute_insert(query)
     
     def log_tcc_status(self,sender,level,msg):
+        msg = msg.replace("'","")
         query = ("INSERT INTO Status_TCC "
                  "(location,utc,level,message) "
                  "VALUES ('%s',UTC_TIMESTAMP(),'%s','%s')")%(sender,level,msg)

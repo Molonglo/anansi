@@ -73,13 +73,13 @@ class TCCRequest(object):
                     self.tcc_info["x"] = float(self.tcc_info["x"])
                     self.tcc_info["y"] = float(self.tcc_info["y"])
                 self.tcc_info["tracking"] = self.tcc_info["tracking"] == "on"
-            arm_status = tcc_cmd.find("arms")
-            east_status = arm_status.find("east").text.strip()
-            west_status = arm_status.find("west").text.strip()
-            if east_status == "disabled":
-                self.east_arm_active = False
-            if west_status == "disabled":
-                self.west_arm_active = False
+                arm_status = tcc_cmd.find("arms")
+                east_status = arm_status.find("east").text.strip()
+                west_status = arm_status.find("west").text.strip()
+                if east_status == "disabled":
+                    self.east_arm_active = False
+                if west_status == "disabled":
+                    self.west_arm_active = False
                             
             
 class TCCServer(Thread):
@@ -98,6 +98,7 @@ class TCCServer(Thread):
         self._shutdown.set()
         self.server.shutdown()
         self.server_thread.join()
+        self.controller.clean_up()
         exit_funcs.deregister(self.shutdown)
 
     def parse_message(self,msg):

@@ -21,12 +21,12 @@ def callback(signum,frame):
 
 def register(func,*args,**kwargs):
     log.log_tcc_status("exit_funcs.register","debug",
-                       "Registering %s"%(str((func,args,kwargs))))
+                       "Registering %s"%(str((func.__name__,args,kwargs))))
     _CALLBACKS.append((func,args,kwargs))
 
 def deregister(func,*args,**kwargs):
     log.log_tcc_status("exit_funcs.deregister","debug",
-                       "Deregistering %s"%(str((func,args,kwargs))))
+                       "Deregistering %s"%(str((func.__name__,args,kwargs))))
     try:
         _CALLBACKS.remove((func,args,kwargs))
     except ValueError:

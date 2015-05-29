@@ -86,11 +86,12 @@ def point(x,y,system="equatorial",tracking="on",east_arm="enabled",west_arm="ena
     client = TCCUser()
     print client.send(str(msg))
 
+def stop():
+    msg = TCCMessage("ebarr")
+    msg.tcc_command("stop")
+    print repr(msg)
+    client = TCCUser()
+    client.send(str(msg),recv=False)
 
 if __name__ == "__main__":
-    #import ephem as e
-    #eq = e.Equatorial(sys.argv[1],sys.argv[2])
-    point(sys.argv[1],sys.argv[2],
-          system="equatorial",tracking="off",
-          east_arm="enabled",west_arm="enabled")
-    #shutdown()
+    stop()
