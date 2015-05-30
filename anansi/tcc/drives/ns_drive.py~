@@ -89,14 +89,10 @@ class NSDriveInterface(BaseDriveInterface):
         self.exit_funcs.register(self.clean_up)
         
     def clean_up(self):
-        #self._stop_active_drive()
-        #self.stop()
-        self.exit_funcs.deregister(self.clean_up)
-
-    def __del__(self):
         self._stop_active_drive()
         self.stop()
-                
+        self.exit_funcs.deregister(self.clean_up)
+
     def _stop_active_drive(self):
         """Stop active drive thread without requesting telescope stop.
 
