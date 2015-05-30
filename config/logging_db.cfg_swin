@@ -1,0 +1,6 @@
+[Login]
+user: tcc_logging
+host: localhost
+port: 3306
+password: D3.^fgp99
+name: tcc_logging
