@@ -2,20 +2,11 @@ from threading import Thread,Event,Timer
 from Queue import Queue
 from time import sleep
 from lxml import etree
-from ConfigParser import ConfigParser
-import os
 from anansi import exit_funcs
 from anansi.comms import TCPServer,BaseHandler
 from anansi.tcc.coordinates import Coordinates
 from anansi.tcc.telescope_controller import TelescopeController
 from anansi.logging_db import MolongloLoggingDataBase as LogDB
-
-config_path = os.environ["ANANSI_CONFIG"]
-config = ConfigParser()
-config.read(os.path.join(config_path,"anansi.cfg"))
-
-ANANSI_SERVER_IP = config.get("IPAddresses","anansi_ip")
-ANANSI_SERVER_PORT = config.getint("IPAddresses","anansi_port")
 
 class TCCResponse(object):
     def __init__(self):
@@ -80,11 +71,9 @@ class TCCRequest(object):
                     self.west_arm_active = False
 
 
-
-
 class TCCRequestHandler(BaseHandler):
     def handle(self):
-        msg = self.recvall()
+        msg = self.recvall()#self.request.recv(8192)
         response = self.server.parse_message(msg)
         self.request.send(str(response))
         if self.server.shutdown_requested.is_set():
@@ -92,9 +81,9 @@ class TCCRequestHandler(BaseHandler):
         
 
 class TCCServer(TCPServer):
-    def __init__(self,ip,port):
+    def __init__(self,ip,port,controller):
         TCPServer.__init__(self,ip,port,handler_class=TCCRequestHandler)
-        self.controller = TelescopeController()
+        self.controller = controller
         self.shutdown_requested = Event()
         self.log = LogDB()
 
@@ -104,18 +93,18 @@ class TCCServer(TCPServer):
         try:
             request = TCCRequest(msg)
             
-            if not request.server_command or request.tcc_command:
+            if not request.server_command and not request.tcc_command:
                 raise Exception("No valid command given")
-
-            if request.server_command == "shutdown":
-                self.log.log_tcc_status("TCCServer.parse_message","info",
-                                        "Received shutdown message")
-                self.shutdown_requested.set()
-            else:
-                raise Exception("Unknown server command")
+            
+            if request.server_command:
+                if request.server_command == "shutdown":
+                    self.log.log_tcc_status("TCCServer.parse_message","info",
+                                            "Received shutdown message")
+                    self.shutdown_requested.set()
+                else:
+                    raise Exception("Unknown server command")
                 
             if request.tcc_command:
-                print "I have tcc command"
                 if request.east_arm_active:
                     self.log.log_tcc_status("TCCServer.parse_message","info",
                                             "Enabling east arm")
@@ -150,6 +139,9 @@ class TCCServer(TCPServer):
                         self.controller.drive_to(coords)
 
                 elif request.tcc_command == "wind_stow":
+                    print
+                    print "WIND STOW"
+                    print
                     self.log.log_tcc_status("TCCServer.parse_message","info",
                                             "Recieved wind stow command")
                     self.controller.wind_stow()
@@ -174,8 +166,15 @@ class TCCServer(TCPServer):
         return response
            
 if __name__ == "__main__":
-    server = TCCServer(ANANSI_SERVER_IP,ANANSI_SERVER_PORT)
+    import os
+    from ConfigParser import ConfigParser
+    config_path = os.environ["ANANSI_CONFIG"]
+    config = ConfigParser()
+    config.read(os.path.join(config_path,"anansi.cfg"))
+    ANANSI_SERVER_IP = config.get("IPAddresses","anansi_ip")
+    ANANSI_SERVER_PORT = config.getint("IPAddresses","anansi_port")
+    controller = TelescopeController()
+    server = TCCServer(ANANSI_SERVER_IP,ANANSI_SERVER_PORT,controller)
     server.start()
-    while True:#not server.shutdown_requested.is_set():
-        print "weeee"
+    while not server.shutdown_requested.is_set():
         sleep(1.0)

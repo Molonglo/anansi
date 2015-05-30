@@ -8,8 +8,8 @@ horizon: 30.0
 anansi_ip: 127.0.0.1
 anansi_port: 38012 
 
-status_ip: 127.0.0.1
-status_port: 38013
+status_broadcast_ip: 127.0.0.1
+status_broadcast_port: 38013
 
 ns_controller_ip: 172.17.228.122
 ns_controller_port: 5555

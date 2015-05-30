@@ -56,7 +56,8 @@ class BaseHandler(SocketServer.BaseRequestHandler):
     def __init__(self, request, client_address, server):
         self.server = server
         self.server.client_address = client_address
-        SocketServer.BaseRequestHandler.__init__(self,request, client_address, server)
+        SocketServer.BaseRequestHandler.__init__(self,request,
+                                                 client_address, server)
 
     def recvall(self):
         message = []
@@ -65,12 +66,12 @@ class BaseHandler(SocketServer.BaseRequestHandler):
             try:
                 message.append(self.request.recv(8192))
             except:
-                break
+                if not message:
+                    continue
+                else:
+                    break
         return "".join(message)
             
-    def finish(self):
-        pass
-
 
 class TCPServer(SocketServer.TCPServer):
     def __init__(self, ip, port, handler_class=BaseHandler):
