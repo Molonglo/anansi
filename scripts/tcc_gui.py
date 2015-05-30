@@ -12,13 +12,15 @@ COORD_SYSTEMS = {
     "equatorial_ha":["HA","Dec"],
     "galactic":["Glong","Glat"],
     "ewdec":["East","Dec"],
-    "horizontal":["Az","Elv"]
+    "horizontal":["Az","Elv"],
+    "nsew":["NS","EW"]
 }
 
 UNITS = [
     "hhmmss",
     "degrees",
-    "radians"
+    "radians",
+    "counts"
 ]
 
 class ArmController(tk.Frame):
@@ -67,12 +69,18 @@ class CoordController(tk.Frame):
     def callback(self,*args,**kwargs):
         system = self.system.get()
         units = self.units.get()
+        if units == "counts":
+            self.system.set("nsew")
+        system = self.system.get()
         if units == "hhmmss":
             default = ""
+        if units == "counts":
+            default = 0
         else:
             default = 0.0
         a,b = COORD_SYSTEMS[system]
         self.param_controller.update(OrderedDict({a:default,b:default}))
+
 
 class Controls(tk.Frame):
     def __init__(self,parent,ip,port,pos,east_arm,west_arm):

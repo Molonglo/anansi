@@ -105,6 +105,7 @@ class Coordinates(eph.FixedBody):
                              /np.cos(self.a_dec))
 
     def get_nsew(self):
+        print "Calling get_nsew"
         self.ew = np.arcsin((0.9999940546 * np.cos(self.a_dec) * np.sin(self.ha))
                             - (0.0029798011806 * np.cos(self.a_dec) * np.cos(self.ha))
                             + (0.002015514993 * np.sin(self.a_dec)))
@@ -112,6 +113,7 @@ class Coordinates(eph.FixedBody):
                              + (0.578881847 * np.cos(self.a_dec) * np.cos(self.ha))
                              + (0.8154114339 * np.sin(self.a_dec)))
                             / np.cos(self.ew))
+        print "done"
 
     def next_rise(self):
         self._compute()

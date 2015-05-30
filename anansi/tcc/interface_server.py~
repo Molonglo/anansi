@@ -35,6 +35,8 @@ class TCCRequest(object):
         self.coordinates = None
         self.east_arm_active = True
         self.west_arm_active = True
+        self.force_east_slow = False
+        self.force_west_slow = False
         self.msg = etree.fromstring(xml_string)
         self.parse_server_commands()
         self.parse_tcc_commands()
@@ -63,17 +65,20 @@ class TCCRequest(object):
                     self.tcc_info["y"] = float(self.tcc_info["y"])
                 self.tcc_info["tracking"] = self.tcc_info["tracking"] == "on"
                 arm_status = tcc_cmd.find("arms")
-                east_status = arm_status.find("east").text.strip()
-                west_status = arm_status.find("west").text.strip()
-                if east_status == "disabled":
+                east = arm_status.find("east")
+                west = arm_status.find("west")
+                pointing.attrib.get("system","equatorial")
+                if east.text.strip() == "disabled":
                     self.east_arm_active = False
-                if west_status == "disabled":
+                if west.text.strip() == "disabled":
                     self.west_arm_active = False
+                self.force_east_slow = east.attrib.get("speed","auto") == "slow"
+                self.force_west_slow = west.attrib.get("speed","auto") == "slow"
 
 
 class TCCRequestHandler(BaseHandler):
     def handle(self):
-        msg = self.recvall()#self.request.recv(8192)
+        msg = self.request.recv(8192)
         response = self.server.parse_message(msg)
         self.request.send(str(response))
         if self.server.shutdown_requested.is_set():
@@ -127,17 +132,27 @@ class TCCServer(TCPServer):
                     info = request.tcc_info
                     self.log.log_tcc_status("TCCServer.parse_message","info",
                                             "Received pointing command: %s"%repr(info))
-                    coords = Coordinates(info["x"],info["y"],system=info["system"],
-                                         units=info["units"],epoch=info["epoch"])
-                    if info["tracking"]:
-                        self.log.log_tcc_status("TCCServer.parse_message","info",
-                                                "Requesting source track")
-                        self.controller.track(coords)
+                    if info["units"] == "counts":
+                        if info["system"] != "nsew":
+                            raise Exception("Can only point in nsew coordinates when given counts")
+                        else:
+                            self.controller.ns_drive.set_tilts_from_counts(
+                                int(info["x"]),int(info["x"]),
+                                force_west_slow=request.force_west_slow
+                                force_west_slow=request.force_west_slow)
+                            #MD drive command will go here when MD drive implemented
                     else:
-                        self.log.log_tcc_status("TCCServer.parse_message","info",
-                                                "Requesting drive to source")
-                        self.controller.drive_to(coords)
-
+                        coords = Coordinates(info["x"],info["y"],system=info["system"],
+                                             units=info["units"],epoch=info["epoch"])
+                        if info["tracking"]:
+                            self.log.log_tcc_status("TCCServer.parse_message","info",
+                                                    "Requesting source track")
+                            self.controller.track(coords)
+                        else:
+                            self.log.log_tcc_status("TCCServer.parse_message","info",
+                                                    "Requesting drive to source")
+                            self.controller.drive_to(coords)
+        
                 elif request.tcc_command == "wind_stow":
                     print
                     print "WIND STOW"
