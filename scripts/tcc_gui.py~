@@ -74,6 +74,8 @@ class CoordController(tk.Frame):
         system = self.system.get()
         if units == "hhmmss":
             default = ""
+        if units == "counts":
+            default = 0
         else:
             default = 0.0
         a,b = COORD_SYSTEMS[system]

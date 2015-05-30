@@ -13,7 +13,7 @@ COORD_SYSTEMS = {
     "galactic":["Glong","Glat"],
     "ewdec":["East","Dec"],
     "horizontal":["Az","Elv"],
-    "nsew":["NS","EW"]
+    "nsew":["NSe","NSw"]
 }
 
 UNITS = [
