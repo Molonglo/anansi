@@ -73,24 +73,30 @@ class ParamController(tk.Frame):
         self.label.pack(side=tk.LEFT)
         self.entry.pack(side=tk.RIGHT)
 
-    def set_bg(self,colour):
+    def set_bg(self,c):
         try:
-            self._entry.config(bg=colour)
-        except:
-            pass
+            self.entry.config(bg=c)
+        except Exception as error:
+            print str(error)
 
     def validator(self,value,last_value):
-        if not value.strip():
+        if value.strip() == "":
             self.set_bg('red')
             self.bell()
-        else:
-            self.set_bg('white')
-        return True
+            return True
+        elif value:
+            c = value[-1]
+            if c.isdigit() or c in [":","."]:
+                self.set_bg('white')
+                return True
+            else:
+                self.bell()
+                return False
 
     def set_label(self,val):
         self.text.set(val)
 
-    def get_value(self):
+    def get(self):
         return self.value.get()
 
 
