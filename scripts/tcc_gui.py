@@ -16,29 +16,82 @@ COORD_SYSTEMS = {
     "nsew":["NSe","NSw"]
 }
 
-UNITS = [
-    "hhmmss",
-    "degrees",
-    "radians",
-    "counts"
-]
+UNITS = {
+    "hhmmss":"00:00:00",
+    "degrees":"0.0",
+    "radians":"0.0",
+    "counts":"0"
+}
+
+class LabeledCheckButton(tk.Frame):
+    def __init__(self,parent,text,onvalue,offvalue):
+        tk.Frame.__init__(self,parent)
+        self.var = tk.StringVar()
+        self.var.set(offvalue)
+        self.cb = tk.Checkbutton(
+            self, text=text, variable=self.var,
+            onvalue=onvalue, offvalue=offvalue)
+        self.cb.pack()
+
+    def get(self):
+        return self.var.get()
+
+    def set(self,val):
+        self.var.set(val)
+
 
 class ArmController(tk.Frame):
     def __init__(self,parent,label_text):
         tk.Frame.__init__(self,parent)
         tk.Label(self,text=label_text).pack(side=tk.TOP)
-        self.enabled = tk.StringVar()
-        self.enabled.set("disabled")
-        self.enabled_cb = tk.Checkbutton(
-            self, text="Enable", variable=self.enabled,
-            onvalue="enabled",offvalue="disabled")
-        self.speed = tk.StringVar()
-        self.speed.set("auto")
-        self.speed_cb = tk.Checkbutton(
-            self, text="Force slow", variable=self.speed,
-            onvalue="slow",offvalue="auto")
-        self.enabled_cb.pack(side=tk.LEFT)
-        self.speed_cb.pack(side=tk.RIGHT)
+        self.enabled = LabeledCheckButton(self,"Enable","enabled","disabled")
+        self.speed = LabeledCheckButton(self,"Force slow","slow","auto")
+        self.enabled.pack(side=tk.LEFT)
+        self.speed.pack(side=tk.RIGHT)
+        
+
+class Arms(tk.Frame):
+    def __init__(self,parent):
+        tk.Frame.__init__(self,parent)
+        self.east = ArmController(self,"East Arm")
+        self.east.pack()
+        self.west = ArmController(self,"West Arm")
+        self.west.pack()
+
+
+class ParamController(tk.Frame):
+    def __init__(self,parent, key, val):
+        tk.Frame.__init__(self, parent)
+        self.text = tk.StringVar()
+        self.text.set(key)
+        self.value = tk.StringVar()
+        self.value.set(val)
+        self.label = tk.Label(self,textvariable=self.text,justify=tk.LEFT,width=4)
+        validator = self.register(self.validator)
+        self.entry = tk.Entry(self,textvariable=self.value, validate='all',
+                              validatecommand=(validator, '%P', '%s'),width=12)
+        self.label.pack(side=tk.LEFT)
+        self.entry.pack(side=tk.RIGHT)
+
+    def set_bg(self,colour):
+        try:
+            self._entry.config(bg=colour)
+        except:
+            pass
+
+    def validator(self,value,last_value):
+        if not value.strip():
+            self.set_bg('red')
+            self.bell()
+        else:
+            self.set_bg('white')
+        return True
+
+    def set_label(self,val):
+        self.text.set(val)
+
+    def get_value(self):
+        return self.value.get()
 
 
 class CoordController(tk.Frame):
@@ -46,51 +99,57 @@ class CoordController(tk.Frame):
         tk.Frame.__init__(self,parent)
         tk.Label(self,text="Coordinates").pack(side=tk.TOP)
         
-        self.param_controller = DictController(self,OrderedDict({"RA":"","Dec":""}))
-        self.param_controller.pack(side=tk.LEFT,pady=1)
-
         self.system = tk.StringVar()
         self.system.set("equatorial")
-        self.system_menu = tk.OptionMenu(self,self.system,*COORD_SYSTEMS.keys(),
-                                         command=self.callback)
-        self.system_menu.pack(side=tk.LEFT)
         self.units = tk.StringVar()
         self.units.set("hhmmss")
-        self.units_menu = tk.OptionMenu(self,self.units,*UNITS,
-                                        command=self.callback)
-        self.units_menu.pack(side=tk.RIGHT)
+        
+        x,y = COORD_SYSTEMS["equatorial"]
+        self.xy_frame = tk.Frame(self)
+        self.x_coord = ParamController(self.xy_frame,x,"00:00:00")
+        self.x_coord.pack()
+        self.y_coord = ParamController(self.xy_frame,y,"00:00:00")
+        self.y_coord.pack()
+        self.xy_frame.pack(side=tk.LEFT,pady=1)
+        
+        self.system_menu = tk.OptionMenu(self,self.system,
+                                         *COORD_SYSTEMS.keys(),
+                                         command=self.system_callback)
+        self.system_menu.pack(side=tk.LEFT)
+        
+        self.units_menu = tk.OptionMenu(self,self.units,*UNITS.keys(),
+                                        command=self.units_callback)
+        self.units_menu.pack(side=tk.LEFT)
 
+    def set_system(self,system):
+        x,y = COORD_SYSTEMS[system]
+        self.x_coord.set_label(x)
+        self.y_coord.set_label(y)
+        
     def get_xy(self):
-        a,b = COORD_SYSTEMS[self.system.get()]
-        x = self.param_controller[a]
-        y = self.param_controller[b]
+        x = self.x_coord.get()
+        y = self.y_coord.get()
         return x,y
 
-    def callback(self,*args,**kwargs):
-        system = self.system.get()
+    def units_callback(self,*args,**kwargs):
         units = self.units.get()
         if units == "counts":
-            self.system.set("nsew")
-        system = self.system.get()
-        if units == "hhmmss":
-            default = ""
-        if units == "counts":
-            default = 0
-        else:
-            default = 0.0
-        a,b = COORD_SYSTEMS[system]
-        self.param_controller.update(OrderedDict({a:default,b:default}))
+            self.set_system("nsew")
 
+    def system_callback(self,*args,**kwargs):
+        system = self.system.get()
+        self.set_system(system)
+        
 
 class Controls(tk.Frame):
-    def __init__(self,parent,ip,port,pos,east_arm,west_arm):
+    def __init__(self,parent,ip,port,pos,arms):
         tk.Frame.__init__(self,parent)
         self.parent = parent
         self.ip = ip
         self.port = port
         self.pos = pos
-        self.east_arm = east_arm
-        self.west_arm = west_arm
+        self.east_arm = arms.east
+        self.west_arm = arms.west
         tk.Button(self,text="Observe",command=self.observe).pack(side=tk.LEFT)
         tk.Button(self,text="Wind Stow",command=self.wind_stow).pack(side=tk.LEFT)
         tk.Button(self,text="Maintenance Stow",command=self.maintenance_stow
@@ -156,17 +215,13 @@ class TCCGraphicalInterface(tk.Frame):
     def __init__(self,parent,ip,port):
         tk.Frame.__init__(self,parent)
         self.parent = parent
-        subframe = tk.Frame(self)
-        self.coord = CoordController(subframe)
-        self.coord.pack(side=tk.LEFT,anchor="n")
-        subframe2 = tk.Frame(subframe)
-        self.east_arm = ArmController(subframe2,"East Arm")
-        self.east_arm.pack()
-        self.west_arm = ArmController(subframe2,"West Arm")
-        self.west_arm.pack()
-        subframe2.pack(side=tk.RIGHT,padx=20)
-        subframe.pack(side=tk.TOP)
-        self.controls = Controls(self,ip,port,self.coord,self.east_arm,self.west_arm)
+        frame = tk.Frame(self)
+        self.coord = CoordController(frame)
+        self.coord.pack(side=tk.LEFT)
+        self.arms = Arms(frame)
+        self.arms.pack(side=tk.LEFT)
+        frame.pack(side=tk.TOP,padx=20)
+        self.controls = Controls(self,ip,port,self.coord,self.arms)
         self.controls.pack(side=tk.BOTTOM,pady=15)
 
 
