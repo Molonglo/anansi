@@ -127,6 +127,5 @@ class StatusServer(TCPServer):
 if __name__ == "__main__":
     server = StatusServer(STATUS_IP,STATUS_PORT)
     server.start()
-    for ii in range(5):
+    while True:
         sleep(1.0)
-    server.shutdown()

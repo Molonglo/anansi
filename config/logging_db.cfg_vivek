@@ -4,4 +4,3 @@ host: localhost
 port: 3306
 password: tcsmysqlpwd
 name: tcc_logging
-

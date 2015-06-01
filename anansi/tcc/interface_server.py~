@@ -2,20 +2,11 @@ from threading import Thread,Event,Timer
 from Queue import Queue
 from time import sleep
 from lxml import etree
-from ConfigParser import ConfigParser
-import os
 from anansi import exit_funcs
 from anansi.comms import TCPServer,BaseHandler
 from anansi.tcc.coordinates import Coordinates
 from anansi.tcc.telescope_controller import TelescopeController
 from anansi.logging_db import MolongloLoggingDataBase as LogDB
-
-config_path = os.environ["ANANSI_CONFIG"]
-config = ConfigParser()
-config.read(os.path.join(config_path,"anansi.cfg"))
-
-ANANSI_SERVER_IP = config.get("IPAddresses","anansi_ip")
-ANANSI_SERVER_PORT = config.getint("IPAddresses","anansi_port")
 
 class TCCResponse(object):
     def __init__(self):
@@ -44,6 +35,8 @@ class TCCRequest(object):
         self.coordinates = None
         self.east_arm_active = True
         self.west_arm_active = True
+        self.force_east_slow = False
+        self.force_west_slow = False
         self.msg = etree.fromstring(xml_string)
         self.parse_server_commands()
         self.parse_tcc_commands()
@@ -72,19 +65,20 @@ class TCCRequest(object):
                     self.tcc_info["y"] = float(self.tcc_info["y"])
                 self.tcc_info["tracking"] = self.tcc_info["tracking"] == "on"
                 arm_status = tcc_cmd.find("arms")
-                east_status = arm_status.find("east").text.strip()
-                west_status = arm_status.find("west").text.strip()
-                if east_status == "disabled":
+                east = arm_status.find("east")
+                west = arm_status.find("west")
+                pointing.attrib.get("system","equatorial")
+                if east.text.strip() == "disabled":
                     self.east_arm_active = False
-                if west_status == "disabled":
+                if west.text.strip() == "disabled":
                     self.west_arm_active = False
-
-
+                self.force_east_slow = east.attrib.get("speed","auto") == "slow"
+                self.force_west_slow = west.attrib.get("speed","auto") == "slow"
 
 
 class TCCRequestHandler(BaseHandler):
     def handle(self):
-        msg = self.recvall()
+        msg = self.request.recv(8192)
         response = self.server.parse_message(msg)
         self.request.send(str(response))
         if self.server.shutdown_requested.is_set():
@@ -92,9 +86,9 @@ class TCCRequestHandler(BaseHandler):
         
 
 class TCCServer(TCPServer):
-    def __init__(self,ip,port):
+    def __init__(self,ip,port,controller):
         TCPServer.__init__(self,ip,port,handler_class=TCCRequestHandler)
-        self.controller = TelescopeController()
+        self.controller = controller
         self.shutdown_requested = Event()
         self.log = LogDB()
 
@@ -104,18 +98,18 @@ class TCCServer(TCPServer):
         try:
             request = TCCRequest(msg)
             
-            if not request.server_command or request.tcc_command:
+            if not request.server_command and not request.tcc_command:
                 raise Exception("No valid command given")
-
-            if request.server_command == "shutdown":
-                self.log.log_tcc_status("TCCServer.parse_message","info",
-                                        "Received shutdown message")
-                self.shutdown_requested.set()
-            else:
-                raise Exception("Unknown server command")
+            
+            if request.server_command:
+                if request.server_command == "shutdown":
+                    self.log.log_tcc_status("TCCServer.parse_message","info",
+                                            "Received shutdown message")
+                    self.shutdown_requested.set()
+                else:
+                    raise Exception("Unknown server command")
                 
             if request.tcc_command:
-                print "I have tcc command"
                 if request.east_arm_active:
                     self.log.log_tcc_status("TCCServer.parse_message","info",
                                             "Enabling east arm")
@@ -138,18 +132,31 @@ class TCCServer(TCPServer):
                     info = request.tcc_info
                     self.log.log_tcc_status("TCCServer.parse_message","info",
                                             "Received pointing command: %s"%repr(info))
-                    coords = Coordinates(info["x"],info["y"],system=info["system"],
-                                         units=info["units"],epoch=info["epoch"])
-                    if info["tracking"]:
-                        self.log.log_tcc_status("TCCServer.parse_message","info",
-                                                "Requesting source track")
-                        self.controller.track(coords)
+                    if info["units"] == "counts":
+                        if info["system"] != "nsew":
+                            raise Exception("Can only point in nsew coordinates when given counts")
+                        else:
+                            self.controller.ns_drive.set_tilts_from_counts(
+                                int(info["x"]),int(info["x"]),
+                                force_east_slow=request.force_east_slow,
+                                force_west_slow=request.force_west_slow)
+                            #MD drive command will go here when MD drive implemented
                     else:
-                        self.log.log_tcc_status("TCCServer.parse_message","info",
-                                                "Requesting drive to source")
-                        self.controller.drive_to(coords)
-
+                        coords = Coordinates(info["x"],info["y"],system=info["system"],
+                                             units=info["units"],epoch=info["epoch"])
+                        if info["tracking"]:
+                            self.log.log_tcc_status("TCCServer.parse_message","info",
+                                                    "Requesting source track")
+                            self.controller.track(coords)
+                        else:
+                            self.log.log_tcc_status("TCCServer.parse_message","info",
+                                                    "Requesting drive to source")
+                            self.controller.drive_to(coords)
+        
                 elif request.tcc_command == "wind_stow":
+                    print
+                    print "WIND STOW"
+                    print
                     self.log.log_tcc_status("TCCServer.parse_message","info",
                                             "Recieved wind stow command")
                     self.controller.wind_stow()
@@ -174,8 +181,15 @@ class TCCServer(TCPServer):
         return response
            
 if __name__ == "__main__":
-    server = TCCServer(ANANSI_SERVER_IP,ANANSI_SERVER_PORT)
+    import os
+    from ConfigParser import ConfigParser
+    config_path = os.environ["ANANSI_CONFIG"]
+    config = ConfigParser()
+    config.read(os.path.join(config_path,"anansi.cfg"))
+    ANANSI_SERVER_IP = config.get("IPAddresses","anansi_ip")
+    ANANSI_SERVER_PORT = config.getint("IPAddresses","anansi_port")
+    controller = TelescopeController()
+    server = TCCServer(ANANSI_SERVER_IP,ANANSI_SERVER_PORT,controller)
     server.start()
-    while True:#not server.shutdown_requested.is_set():
-        print "weeee"
+    while not server.shutdown_requested.is_set():
         sleep(1.0)

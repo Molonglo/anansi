@@ -288,80 +288,80 @@ class NSDriveInterface(BaseDriveInterface):
     def set_tilts(self,east_tilt,west_tilt,
                   force_east_slow=False,force_west_slow=False):
         """Set the tilts of the E and W arm NS drives."""
-        if self.west_disabled and self.east_disabled:
-            return
-        elif self.west_disabled:
-            self.set_east_tilt(east_tilt,force_east_slow)
-        elif self.east_disabled:
-            self.set_west_tilt(east_tilt,force_east_slow)
-        else:
-            east_count,west_count = self.tilts_to_counts(east_tilt,west_tilt)
-            self.set_tilts_from_counts(east_count,west_count,
-                                       force_east_slow,force_west_slow)
+        east_count,west_count = self.tilts_to_counts(east_tilt,west_tilt)
+        self.set_tilts_from_counts(east_count,west_count,
+                                   force_east_slow,force_west_slow)
         
     def set_tilts_from_counts(self,east_count,west_count,
                               force_east_slow=False,force_west_slow=False):
         """Set the tilts of the E and W arm NS drives based on encoder counts."""
         drive_code = "1"
-        encoded_count = codec.it_pack(east_count) + codec.it_pack(west_count)
-        ed,wd,es,ws = self._prepare(east_count,west_count,force_east_slow,force_west_slow)
-        if es is None or ws is None:
-            # if neither arm will move more than 40 counts              
-            raise NSCountError("E or W arm requested move of less than 40 counts")
-        elif ws is None:
-            # if only east arm is to move 
+        if self.west_disabled and self.east_disabled:
+            return
+        elif self.west_disabled:
             self.set_east_tilt_from_counts(east_count,force_east_slow)
-        elif es is None:
-            # if only west arm is to move                                  
+        elif self.east_disabled:
             self.set_west_tilt_from_counts(west_count,force_west_slow)
         else:
-            e_dir_speed = 2*ed + es
-            w_dir_speed = 8*wd + 4*ws
-            encoded_dir_speed = pack("B",e_dir_speed + w_dir_speed)
-            data = encoded_count+encoded_dir_speed
-            self._drive(drive_code,data)
+            encoded_count = codec.it_pack(east_count) + codec.it_pack(west_count)
+            ed,wd,es,ws = self._prepare(east_count,west_count,force_east_slow,force_west_slow)
+            if es is None or ws is None:
+                # if neither arm will move more than 40 counts              
+                raise NSCountError("E or W arm requested move of less than 40 counts")
+            elif ws is None:
+                # if only east arm is to move 
+                self.set_east_tilt_from_counts(east_count,force_east_slow)
+            elif es is None:
+                # if only west arm is to move                                  
+                self.set_west_tilt_from_counts(west_count,force_west_slow)
+            else:
+                e_dir_speed = 2*ed + es
+                w_dir_speed = 8*wd + 4*ws
+                encoded_dir_speed = pack("B",e_dir_speed + w_dir_speed)
+                data = encoded_count+encoded_dir_speed
+                self._drive(drive_code,data)
         
     def set_east_tilt(self,east_tilt,force_slow=False):
         """Set tilt of east arm."""
-        if self.east_disabled:
-            return
-        else:
-            east_count,_ = self.tilts_to_counts(east_tilt,0)
-            self.set_east_tilt_from_counts(east_count,force_slow)
+        east_count,_ = self.tilts_to_counts(east_tilt,0)
+        self.set_east_tilt_from_counts(east_count,force_slow)
 
     def set_east_tilt_from_counts(self,east_count,force_slow=False):
         """Set tilt of east arm base on encoder counts."""
-        drive_code = "2"
-        encoded_count = codec.it_pack(east_count)
-        ed,_,es,_ = self._prepare(east_count,None,force_slow,None)
-        if es is None:
-            raise InvalidCounts("E arm requested move of less than 40 counts")
+        if self.east_disabled:
+            return
         else:
-            dir_speed = 2*ed + es
-            encoded_dir_speed = pack("B",dir_speed)
-            data = encoded_count+encoded_dir_speed
-            self._drive(drive_code,data)
+            drive_code = "2"
+            encoded_count = codec.it_pack(east_count)
+            ed,_,es,_ = self._prepare(east_count,None,force_slow,None)
+            if es is None:
+                raise InvalidCounts("E arm requested move of less than 40 counts")
+            else:
+                dir_speed = 2*ed + es
+                encoded_dir_speed = pack("B",dir_speed)
+                data = encoded_count+encoded_dir_speed
+                self._drive(drive_code,data)
 
     def set_west_tilt(self,west_tilt,force_slow=False):
         """Set tilt of west arm."""
-        if self.west_disabled:
-            return
-        else:
-            _,west_count = self.tilts_to_counts(0,west_tilt)
-            self.set_west_tilt_from_counts(west_count,force_slow)
+        _,west_count = self.tilts_to_counts(0,west_tilt)
+        self.set_west_tilt_from_counts(west_count,force_slow)
 
     def set_west_tilt_from_counts(self,west_count,force_slow=False):
         """Set tilt of west arm base on encoder counts."""
-        drive_code = "3"
-        encoded_count = codec.it_pack(west_count)
-        _,wd,_,ws = self._prepare(None,west_count,None,force_slow)
-        if ws is None:
-            raise InvalidCounts("W arm requested move of less than 40 counts")
+        if self.west_disabled:
+            return
         else:
-            dir_speed = 8*wd + 4*ws
-            encoded_dir_speed = pack("B",dir_speed)
-            data = encoded_count+encoded_dir_speed
-            self._drive(drive_code,data)
+            drive_code = "3"
+            encoded_count = codec.it_pack(west_count)
+            _,wd,_,ws = self._prepare(None,west_count,None,force_slow)
+            if ws is None:
+                raise InvalidCounts("W arm requested move of less than 40 counts")
+            else:
+                dir_speed = 8*wd + 4*ws
+                encoded_dir_speed = pack("B",dir_speed)
+                data = encoded_count+encoded_dir_speed
+                self._drive(drive_code,data)
 
     def _calculate_tilts(self,u_dict):
         """Update status dictionary to converts counts to tilts."""
