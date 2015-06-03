@@ -184,7 +184,10 @@ class Controls(tk.Frame):
     def recv_status(self):
         client = TCPClient(self.status_ip,self.status_port,timeout=5.0)
         response = client.receive()
-        print response
+        try:
+            print etree.tostring(response,encoding='ISO-8859-1',pretty_print=True)
+        except:
+            print "Error:",response
         client.close()
 
     def observe(self):

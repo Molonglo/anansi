@@ -185,9 +185,11 @@ class Controls(tk.Frame):
         client = TCPClient(self.status_ip,self.status_port,timeout=5.0)
         response = client.receive()
         try:
-            print etree.tostring(response,encoding='ISO-8859-1',pretty_print=True)
-        except:
-            print "Error:",response
+            xml = etree.fromstring(response)
+            print etree.tostring(xml,encoding='ISO-8859-1',pretty_print=True)
+        except Exception as error:
+            print str(error)
+            print response
         client.close()
 
     def observe(self):
