@@ -4,15 +4,6 @@ from anansi.tcc.interface_server import TCCServer
 from anansi.tcc.status_server import StatusServer
 from anansi.tcc.telescope_controller import TelescopeController
 
-import os
-from ConfigParser import ConfigParser
-config_path = os.environ["ANANSI_CONFIG"]
-config = ConfigParser()
-config.read(os.path.join(config_path,"anansi.cfg"))
-ANANSI_SERVER_IP = config.get("IPAddresses","anansi_ip")
-ANANSI_SERVER_PORT = config.getint("IPAddresses","anansi_port")
-
-
 def main(config_file):
     config = ConfigParser()
     config.read(config_file)

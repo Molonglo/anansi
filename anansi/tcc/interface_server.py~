@@ -137,7 +137,7 @@ class TCCServer(TCPServer):
                             raise Exception("Can only point in nsew coordinates when given counts")
                         else:
                             self.controller.ns_drive.set_tilts_from_counts(
-                                int(info["x"]),int(info["x"]),
+                                int(info["x"]),int(info["y"]),
                                 force_east_slow=request.force_east_slow,
                                 force_west_slow=request.force_west_slow)
                             #MD drive command will go here when MD drive implemented

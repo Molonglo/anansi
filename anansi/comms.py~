@@ -66,7 +66,10 @@ class BaseHandler(SocketServer.BaseRequestHandler):
             try:
                 message.append(self.request.recv(8192))
             except:
-                break
+                if not message:
+                    continue
+                else:
+                    break
         return "".join(message)
             
 

@@ -13,7 +13,7 @@ def main(config_file):
     status_port = config.getint("IPAddresses","status_port")
     controller = TelescopeController()
     interface_server = TCCServer(anansi_ip,anansi_port,controller)
-    status_server = StatusServer(status_ip,status_port)
+    status_server = StatusServer(status_ip,status_port,controller)
     interface_server.start()
     status_server.start()
     while not interface_server.shutdown_requested.is_set():

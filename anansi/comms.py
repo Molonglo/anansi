@@ -44,11 +44,13 @@ class BaseConnection(object):
             try:
                 self.sock.shutdown(socket.SHUT_RDWR)
             except Exception as error:
-                logging.warning(error)
+                pass
+                #logging.warning(error)
             try:
                 self.sock.close()
             except Exception as error:
-                logging.warning(error)
+                pass
+                #logging.warning(error)
             self.sock = None
 
 

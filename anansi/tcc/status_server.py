@@ -48,19 +48,32 @@ STATUS_DICT_DEFAULTS = {
 
 class StatusRequestHandler(BaseHandler):
     def handle(self):
-        xml = self.server.get_xml_status()
         try:
-            response = etree.tostring(xml,encoding='ISO-8859-1')
+            self.server.update()
         except Exception as error:
             self.request.send(str(error))
         else:
-            self.request.send(response)
+            xml = self.server.get_xml_status()
+            try:
+                response = etree.tostring(xml,encoding='ISO-8859-1')
+            except Exception as error:
+                self.request.send(str(error))
+            else:
+                self.request.send(response)
 
 
 class StatusServer(TCPServer):
-    def __init__(self,ip,port):
+    def __init__(self,ip,port,controller):
         TCPServer.__init__(self,ip,port,handler_class=StatusRequestHandler)
         self.status_dict = STATUS_DICT_DEFAULTS
+        self.controller = controller
+
+    def update(self):
+        status = self.controller.ns_drive.get_status()
+        for key,val in status.items():
+            new_key = "_ns_".join(key.split("_"))
+            self.status_dict[new_key] = val
+            print new_key,val
 
     def _xml_from_key(self,key):
         return gen_xml_element(key,str(self.status_dict[key]))

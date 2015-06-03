@@ -96,7 +96,7 @@ class ParamController(tk.Frame):
     def set_label(self,val):
         self.text.set(val)
 
-    def get_value(self):
+    def get(self):
         return self.value.get()
 
 

@@ -51,3 +51,4 @@ class TCCMessage(object):
         elem.append(pointing)
         elem.append(arms)
         self.root.append(elem)
+
