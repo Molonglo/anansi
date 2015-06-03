@@ -148,11 +148,14 @@ class CoordController(tk.Frame):
         
 
 class Controls(tk.Frame):
-    def __init__(self,parent,ip,port,pos,arms):
+    def __init__(self,parent,anansi_ip,anansi_port,
+                 status_ip,status_port,pos,arms):
         tk.Frame.__init__(self,parent)
         self.parent = parent
-        self.ip = ip
-        self.port = port
+        self.anansi_ip = anansi_ip
+        self.anansi_port = anansi_port
+        self.status_ip = status_ip
+        self.status_port = status_port
         self.pos = pos
         self.east_arm = arms.east
         self.west_arm = arms.west
@@ -161,14 +164,16 @@ class Controls(tk.Frame):
         tk.Button(self,text="Maintenance Stow",command=self.maintenance_stow
                   ).pack(side=tk.LEFT)
         tk.Button(self,text="Stop",command=self.stop).pack(side=tk.LEFT)
+        tk.Button(self,text="Status",command=self.recv_status).pack(side=tk.LEFT)
         tk.Button(self,text="Close",command=self.close).pack(side=tk.LEFT)
-
-    def send_recv(self,msg):
-        client = TCPClient(self.ip,self.port,timeout=5.0)
+        
+    def send_recv_anansi(self,msg):
+        client = TCPClient(self.anansi_ip,self.anansi_port,timeout=5.0)
         print "Sending:"
         print repr(msg)
         client.send(str(msg))
         response = client.receive()
+        client.close()
         try:
             xml = etree.fromstring(response)
         except etree.XMLSyntaxError:
@@ -176,6 +181,12 @@ class Controls(tk.Frame):
         else:
             print etree.tostring(xml,encoding='ISO-8859-1',pretty_print=True)
                 
+    def recv_status(self):
+        client = TCPClient(self.status_ip,self.status_port,timeout=5.0)
+        response = client.receive()
+        print response
+        client.close()
+
     def observe(self):
         system = self.pos.system.get()
         units = self.pos.units.get()
@@ -196,29 +207,29 @@ class Controls(tk.Frame):
                          east_speed=east_speed,
                          west_speed=west_speed,                         
                          units=units)
-        self.send_recv(msg)
+        self.send_recv_anansi(msg)
 
     def wind_stow(self):
         msg = TCCMessage("tcc_gui")
         msg.tcc_command("wind_stow")
-        self.send_recv(msg)
+        self.send_recv_anansi(msg)
 
     def maintenance_stow(self):
         msg = TCCMessage("tcc_gui")
         msg.tcc_command("maintenace_stow")
-        self.send_recv(msg)
+        self.send_recv_anansi(msg)
 
     def stop(self):
         msg = TCCMessage("tcc_gui")
         msg.tcc_command("stop")
-        self.send_recv(msg)
+        self.send_recv_anansi(msg)
 
     def close(self):
         self._root().destroy()
 
 
 class TCCGraphicalInterface(tk.Frame):
-    def __init__(self,parent,ip,port):
+    def __init__(self,parent,anansi_ip,anansi_port,status_ip,status_port):
         tk.Frame.__init__(self,parent)
         self.parent = parent
         frame = tk.Frame(self)
@@ -227,7 +238,9 @@ class TCCGraphicalInterface(tk.Frame):
         self.arms = Arms(frame)
         self.arms.pack(side=tk.LEFT)
         frame.pack(side=tk.TOP,padx=20)
-        self.controls = Controls(self,ip,port,self.coord,self.arms)
+        self.controls = Controls(self,anansi_ip,anansi_port,
+                                 status_ip,status_port,
+                                 self.coord,self.arms)
         self.controls.pack(side=tk.BOTTOM,pady=15)
 
 
@@ -239,7 +252,9 @@ if __name__ == "__main__":
     config.read(config_file)
     anansi_ip = config.get("IPAddresses","anansi_ip")
     anansi_port = config.getint("IPAddresses","anansi_port")
+    status_ip = config.get("IPAddresses","status_ip")
+    status_port = config.getint("IPAddresses","status_port")
     root = tk.Tk()
-    ui = TCCGraphicalInterface(root,anansi_ip,anansi_port)
+    ui = TCCGraphicalInterface(root,anansi_ip,anansi_port,status_ip,status_port)
     ui.pack()
     root.mainloop()
