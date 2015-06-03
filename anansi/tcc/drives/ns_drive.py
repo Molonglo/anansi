@@ -187,6 +187,7 @@ class NSDriveInterface(BaseDriveInterface):
             self._log_position()
         else:
             decoded_response = None
+            self.log.log_eZ80_status(code,decoded_response)
         if code == "E":
             raise eZ80NSError(decoded_response)
         if (code == "C") and (decoded_response >= 15):
