@@ -21,6 +21,7 @@ FIXED_SYSTEMS = [
     "horizontal"
     ]
 
+# COMPLETE JUST EQUATORIAL TRACKING FOR TESTING PURPOSES
 
 class Molonglo(eph.Observer):
     def __init__(self,date=None,epoch=None):

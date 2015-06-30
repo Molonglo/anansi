@@ -21,12 +21,6 @@ FIXED_SYSTEMS = [
     "horizontal"
     ]
 
-MOVING_SYSTEMS = [
-    "equatorial",
-    "galactic"
-    ]
-
-
 
 class Molonglo(eph.Observer):
     def __init__(self,date=None,epoch=None):
@@ -42,11 +36,9 @@ class Molonglo(eph.Observer):
         self.compute_pressure()
 
 
-
 class Coordinates(eph.FixedBody):
     def __init__(self,x,y,system="equatorial",units="radians",
                  name="unknown",epoch="2000",date=None):
-        
         super(Coordinates,self).__init__()
         self.name = name
         self.system = system
@@ -76,8 +68,8 @@ class Coordinates(eph.FixedBody):
             self._epoch = eph.now()
             date = self.date
             
-        observatory = Molonglo(date=date,epoch=self._epoch)
-        self.lst = observatory.sidereal_time()
+        self.observatory = Molonglo(date=date,epoch=self._epoch)
+        self.lst = self.observatory.sidereal_time()
         
         if self.system == "equatorial":
             coords = eph.Equatorial(self.x,self.y)
@@ -96,52 +88,46 @@ class Coordinates(eph.FixedBody):
             self._dec = coords.dec
 
         elif self.system == "horizontal":
-            self._ra,self._dec = observatory.radec_of(self.x,self.y)
+            self._ra,self._dec = self.observatory.radec_of(self.x,self.y)
 
         elif self.system == "nsew":
             ha,dec = nsew_to_hadec(self.x,self.y)
             coords = eph.Equatorial(ha,dec)
-            observatory = Molonglo(date,self.epoch)
-            self._ra  = observatory.sidereal_time() - ha
+            self.observatory = Molonglo(date,self.epoch)
+            self._ra  = self.observatory.sidereal_time() - ha
             self._dec = coords.dec
 
-        self.compute(observatory)
-        gal = eph.Galactic(eph.Equatorial(self.a_ra,self.a_dec))
-        self.glat = gal.lat
-        self.glon = gal.long
-        self.ha = self.lst - self.a_ra
-        self.ns,self.ew = hadec_to_nsew(self.ha,self.a_dec)
-
-    def _compute(self,date=None):
-        self.observatory = Molonglo(date=date,epoch=self.epoch)
-        print self.observatory.date
-        self.lst = self.observatory.sidereal_time()
         self.compute(self.observatory)
-        self.get_galactic()
-        self.get_ha()
-        self.get_nsew()
-
-    def get_galactic(self):
         gal = eph.Galactic(eph.Equatorial(self.a_ra,self.a_dec))
         self.glat = gal.lat
         self.glon = gal.long
-
-    def get_ha(self):
         self.ha = self.lst - self.a_ra
-
-    def get_nsew(self):
         self.ns,self.ew = hadec_to_nsew(self.ha,self.a_dec)
+
+    def is_up(self):
+        self.update()
+        return self.alt > self.observatory.horizon
+
+    def _check_fixed(self):
+        if self.system in FIXED_SYSTEMS:
+            if not self.is_up():
+                raise eph.NeverUpError("Source never above horizon")
+            else:
+                raise eph.AlwaysUpError("Source never below horizon")
 
     def next_rise(self):
-        self._compute()
+        self._check_fixed()
+        self.update()
         return self.observatory.next_rising(self)
 
     def next_set(self):
-        self._compute()
+        self._check_fixed()
+        self.update()
         return self.observatory.next_setting(self)
-
+    
     def next_transit(self):
-        self._compute()
+        self._check_fixed()
+        self.update()
         return self.observatory.next_transit(self)
 
 def get_nsew(a_dec,ha):
