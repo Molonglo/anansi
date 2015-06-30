@@ -13,7 +13,7 @@ MOL_LAT = config.getfloat("MolongloEphemeris","latitude")
 MOL_LON = config.getfloat("MolongloEphemeris","longitude")
 MOL_ELV = config.getfloat("MolongloEphemeris","elevation")
 MOL_HOR = config.getfloat("MolongloEphemeris","horizon")
-
+J2000 = eph.J2000
 
 FIXED_SYSTEMS = [
     "equatorial_ha",
@@ -130,6 +130,80 @@ class Coordinates(eph.FixedBody):
         self._check_fixed()
         self.update()
         return self.observatory.next_transit(self)
+
+    
+class CoordinatesMixin(object):
+    def generate_other_systems(self):
+        eq = eph.Equatorial(self.a_ra,self.a_dec,epoch=self._epoch)
+        gal = eph.Galactic(eq)
+        self.glat = gal.lat
+        self.glon = gal.lon
+        ecl = eph.Ecliptic(eq)
+        self.elat = ecl.lat
+        self.elon = ecl.lon
+        
+    def is_up(self,date=None):
+        self.compute(date)
+        return self.alt > MOL_HOR
+        
+        
+class EquatorialCoordinates(eph.FixedBody,CoordinatesMixin):
+    def __init__(self,ra,dec,epoch=J2000):
+        self._ra = ra
+        self._dec = dec
+        self._epoch = epoch
+        eph.FixedBody.__init__(self)
+
+    def compute(self,date=None):
+        date = eph.now() if date is None else date
+        most = Molonglo(date,self._epoch)
+        eph.FixedBody.compute(self,most)
+        self.lst = most.sidereal_time()
+        self.ha = self.lst - self.a_ra
+        self.ns,self.ew = hadec_to_nsew(self.ha,self.a_dec)
+        self.generate_other_systems()
+        
+    
+class FixedCoordinates(eph.FixedBody,CoordinatesMixin):
+    def __init__(self,ns,ew,epoch=J2000):
+        self.ns = ns
+        self.ew = ew
+        self._epoch = epoch
+        eph.FixedBody.__init__(self)
+
+    def compute(self,date=None):
+        date = eph.now() if date is None else date
+        most = Molonglo(date,self._epoch)
+        self.lst = most.sidereal_time()
+        self.ha,self._dec = nsew_to_hadec(self.ns,self.ew)
+        self._ra = self.lst - self.ha
+        eph.FixedBody.compute(self,most)
+        self.generate_other_systems()
+        
+        
+class BodyCoordinates(eph.FixedBody,CoordinatesMixin):
+    def __init__(self,body,epoch=eph.J2000):
+        self.body = body
+        self.body._epoch = epoch
+        self._epoch = epoch
+        eph.FixedBody.__init__(self)
+
+    def compute(self,date=None):
+        date = eph.now() if date is None else date
+        most = Molonglo(date,self._epoch)
+        self.lst = most.sidereal_time()
+        self.body.compute(most)
+        self._ra,self._dec = self.body.a_ra,self.body.a_dec
+        eph.FixedBody.compute(self,most)
+        self.ha = self.lst - self.a_ra
+        self.ns,self.ew = hadec_to_nsew(self.ha,self.a_dec)
+        self.generate_other_systems()
+        
+
+
+
+
+
 
 def get_nsew(a_dec,ha):
     ew = np.arcsin((0.9999940546 * np.cos(a_dec) * np.sin(ha))
