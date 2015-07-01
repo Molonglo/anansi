@@ -1,6 +1,0 @@
-from ns_drive import NSDriveInterface
-
-x = NSDriveInterface()
-y = NSDriveInterface()
-
-del x
