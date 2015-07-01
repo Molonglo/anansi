@@ -10,10 +10,8 @@ import numpy as np
 import logging
 from lxml import etree
 from anansi.utils import gen_xml_element
-
 from anansi.logging_db import MolongloLoggingDataBase as LogDB
-from anansi.tcc.drives.ns_drive import NSDriveInterface
-from anansi.tcc.drives.md_drive_dummy import MDDriveInterface
+from anansi.tcc.drives import NSDriveInterface,MDDriveInterface
 
 WIND_STOW_NSEW = (0.0,0.0)              
 MAINTENANCE_STOW_NSEW = (d2r(45.0),0.0) 

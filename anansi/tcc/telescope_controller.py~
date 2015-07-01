@@ -1,7 +1,6 @@
 from threading import Thread,Event
 from Queue import Queue
 import anansi.utils
-from anansi.comms import TCPClient,TCPServer,UDPSender
 from anansi.tcc.coordinates import Coordinates
 from anansi.utils import d2r,r2d
 from struct import pack,unpack
