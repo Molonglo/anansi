@@ -1,14 +1,7 @@
 [Login]
-<<<<<<< HEAD
-user: tcc_logging
-host: 127.0.0.1
-port: 3306
-password: D3.^fgp99
-name: tcc_logging
-=======
 user: root
-host: localhost
+host: 172.17.227.127
 port: 3306
 password: tcsmysqlpwd
 name: tcc_logging
->>>>>>> 631780a9a60a35591d449600cc831bc99a0ad4f0
+
