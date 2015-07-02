@@ -30,8 +30,10 @@ MD_MIN_COUNTS = config.getfloat("DriveParameters","md_minimum_counts")
 MD_SLOW_COUNTS = config.getfloat("DriveParameters","md_slow_counts")
 FAST = 0
 SLOW = 1
-NORTH_OR_WEST = 0
-SOUTH_OR_EAST = 1
+EAST = 1
+WEST = 0 
+NORTH = 0
+SOUTH = 1
 
 class eZ80Error(Exception):
     """Generic exception returned from eZ80
@@ -152,7 +154,6 @@ class DriveInterface(object):
         else:
             self.log.log_eZ80_command(code,"None")
 
-
     def _stop_active_drive(self):
         """Stop active drive thread without requesting telescope stop.                             
                                                                                                    
@@ -205,9 +206,9 @@ class DriveInterface(object):
                 break
 
     def _log_position(self):
-        """Log the position of the NS drives in the logging database.                              
+        """Log the position of the drives in the logging database.                              
         """
-        self.log.log_position("ns",
+        self.log.log_position(self.__class__.__name__,
             self.status_dict["west_count"],
             self.status_dict["east_count"])
 
@@ -304,7 +305,7 @@ class DriveInterface(object):
         status = self.get_status()
         if east_counts is not None:
             east_offset = east_counts - status["east_count"]
-            east_dir = NORTH_OR_WEST if east_offset >= 0 else SOUTH_OR_EAST
+            east_dir = NORTH if east_offset >= 0 else SOUTH
             if abs(east_offset) <= self._minimum_count_limit:
                 east_speed = None
             elif abs(east_offset) <= self._slow_drive_limit or force_east_slow:
@@ -317,7 +318,7 @@ class DriveInterface(object):
 
         if west_counts is not None:
             west_offset = west_counts - status["west_count"]
-            west_dir = NORTH_OR_WEST if west_offset >= 0 else SOUTH_OR_EAST
+            west_dir = NORTH if west_offset >= 0 else SOUTH
             if abs(west_offset) <= self._minimum_count_limit:
                 west_speed = None
             elif abs(west_offset) <= self._slow_drive_limit or force_west_slow:
@@ -327,7 +328,7 @@ class DriveInterface(object):
         else:
             west_dir = None
             west_speed = None
-
+    
         return east_dir,west_dir,east_speed,west_speed
 
     def tilts_to_counts(self,east_tilt,west_tilt):
@@ -364,7 +365,7 @@ class DriveInterface(object):
             ed,wd,es,ws = self._prepare(east_count,west_count,force_east_slow,force_west_slow)
             if es is None or ws is None:
                 # if neither arm will move more than 40 counts                                     
-                message = "E or W arm requested move of less than %d counts"%self.minimum_count_limit
+                message = "E or W arm requested move of less than %d counts"%self._minimum_count_limit
                 raise CountError(message,self)
             elif ws is None:
                 # if only east arm is to move                                                      
@@ -393,7 +394,7 @@ class DriveInterface(object):
             encoded_count = codec.it_pack(east_count)
             ed,_,es,_ = self._prepare(east_count,None,force_slow,None)
             if es is None:
-                message = "E or W arm requested move of less than %d counts"%self.minimum_count_limit
+                message = "E or W arm requested move of less than %d counts"%self._minimum_count_limit
                 raise CountError(message,self)
             else:
                 dir_speed = 2*ed + es
@@ -415,7 +416,7 @@ class DriveInterface(object):
             encoded_count = codec.it_pack(west_count)
             _,wd,_,ws = self._prepare(None,west_count,None,force_slow)
             if ws is None:
-                message = "E or W arm requested move of less than %d counts"%self.minimum_count_limit
+                message = "E or W arm requested move of less than %d counts"%self._minimum_count_limit
                 raise CountError(message,self)
             else:
                 dir_speed = 8*wd + 4*ws
@@ -493,3 +494,44 @@ class MDDriveInterface(DriveInterface):
         east_tilt = arcsin((east_counts-self._tilt_zero)/self._east_scaling)
         west_tilt = arcsin((west_counts-self._tilt_zero)/self._east_scaling)
         return east_tilt,west_tilt
+
+    def _prepare(self,east_counts=None,west_counts=None,
+                 force_east_slow=False,force_west_slow=False):
+        status = self.get_status()
+        if east_counts is not None:
+            east_offset = east_counts - status["east_count"]
+            east_dir = EAST if east_offset >= 0 else WEST
+            if abs(east_offset) <= self._minimum_count_limit:
+                east_speed = None
+            elif abs(east_offset) <= self._slow_drive_limit or force_east_slow:
+                east_speed = SLOW
+            else:
+                east_speed = FAST
+        else:
+            east_dir = None
+            east_speed = None
+
+        if west_counts is not None:
+            west_offset = west_counts - status["west_count"]
+            west_dir = EAST if west_offset >= 0 else WEST
+            if abs(west_offset) <= self._minimum_count_limit:
+                west_speed = None
+            elif abs(west_offset) <= self._slow_drive_limit or force_west_slow:
+                west_speed = SLOW
+            else:
+                west_speed = FAST
+        else:
+            west_dir = None
+            west_speed = None
+
+        return east_dir,west_dir,east_speed,west_speed
+    
+    def zero_meridian_drives(self,arm="B",start=1):
+        self._stop_active_drive()
+        self._open_client()
+        data = arm+pack("B",start)
+        self._send_message("R",data)
+        code = None
+        while code != "S":
+            code,_ = self._parse_message(*self._receive_message())
+        self._close_client()
