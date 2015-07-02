@@ -285,6 +285,9 @@ class DriveInterface(object):
             code,_ = self._parse_message(*self._receive_message())
         self._close_client()
 
+    def _get_direction(self,offset):
+        return 1 if offset >= 0 else 0
+
     def _prepare(self,east_counts=None,west_counts=None,
                  force_east_slow=False,force_west_slow=False):
         """Prepare values for drive message.                                                       
@@ -305,7 +308,7 @@ class DriveInterface(object):
         status = self.get_status()
         if east_counts is not None:
             east_offset = east_counts - status["east_count"]
-            east_dir = NORTH if east_offset >= 0 else SOUTH
+            east_dir = self._get_direction(east_offset)
             if abs(east_offset) <= self._minimum_count_limit:
                 east_speed = None
             elif abs(east_offset) <= self._slow_drive_limit or force_east_slow:
@@ -318,7 +321,7 @@ class DriveInterface(object):
 
         if west_counts is not None:
             west_offset = west_counts - status["west_count"]
-            west_dir = NORTH if west_offset >= 0 else SOUTH
+            west_dir = self._get_direction(west_offset)
             if abs(west_offset) <= self._minimum_count_limit:
                 west_speed = None
             elif abs(west_offset) <= self._slow_drive_limit or force_west_slow:
@@ -457,6 +460,9 @@ class NSDriveInterface(DriveInterface):
             minimum_count_limit,slow_drive_limit,
             timeout)
 
+    def _get_direction(self,offset):
+        return NORTH if offset >= 0 else SOUTH
+
 
 class MDDriveInterface(DriveInterface):
     """Interface to eZ80 controlling Molonglo MD drives.                                           
@@ -495,37 +501,9 @@ class MDDriveInterface(DriveInterface):
         west_tilt = arcsin((west_counts-self._tilt_zero)/self._east_scaling)
         return east_tilt,west_tilt
 
-    def _prepare(self,east_counts=None,west_counts=None,
-                 force_east_slow=False,force_west_slow=False):
-        status = self.get_status()
-        if east_counts is not None:
-            east_offset = east_counts - status["east_count"]
-            east_dir = EAST if east_offset >= 0 else WEST
-            if abs(east_offset) <= self._minimum_count_limit:
-                east_speed = None
-            elif abs(east_offset) <= self._slow_drive_limit or force_east_slow:
-                east_speed = SLOW
-            else:
-                east_speed = FAST
-        else:
-            east_dir = None
-            east_speed = None
+    def _get_direction(self,offset):
+        return EAST if offset >= 0 else WEST
 
-        if west_counts is not None:
-            west_offset = west_counts - status["west_count"]
-            west_dir = EAST if west_offset >= 0 else WEST
-            if abs(west_offset) <= self._minimum_count_limit:
-                west_speed = None
-            elif abs(west_offset) <= self._slow_drive_limit or force_west_slow:
-                west_speed = SLOW
-            else:
-                west_speed = FAST
-        else:
-            west_dir = None
-            west_speed = None
-
-        return east_dir,west_dir,east_speed,west_speed
-    
     def zero_meridian_drives(self,arm="B",start=1):
         self._stop_active_drive()
         self._open_client()
