@@ -12,6 +12,7 @@ from lxml import etree
 from anansi.utils import gen_xml_element
 from anansi.logging_db import MolongloLoggingDataBase as LogDB
 from anansi.tcc.drives import NSDriveInterface,MDDriveInterface
+import ephem as eph
 
 WIND_STOW_NSEW = (0.0,0.0)              
 MAINTENANCE_STOW_NSEW = (d2r(45.0),0.0) 
@@ -31,9 +32,9 @@ class Track(Thread):
         while not self._stop.is_set():
             self.log.log_tcc_status("Track", "info",
                                     "Updating positions for track")
-            self.coords.get_nsew()
-            ns = coordinates.ns
-            ew = coordinates.ew
+            self.coords.update()
+            ns = self.coords.ns
+            ew = self.coords.ew
             self.ns_drive.set_tilts(ns,ns)
             self.md_drive.set_tilts(ew,ew)
             sleep(self.update_cycle)
