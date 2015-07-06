@@ -16,35 +16,88 @@ import ephem as eph
 
 WIND_STOW_NSEW = (0.0,0.0)              
 MAINTENANCE_STOW_NSEW = (d2r(45.0),0.0) 
+NS_RATE = 0.0001
+MD_RATE = 0.0001
 
-class Track(Thread):
-    def __init__(self, ns_drive, md_drive, coordinates, update=2.0):
-        self.ns_drive = ns_drive
-        self.md_drive = md_drive
+class BaseTracker(Thread):
+    def __init__(self, drive, coords, rate, east_active=True, west_active=True):
+        self.drive = drive
         self.coords = coords
+        self.rate = rate
+        self.east_active = True
+        self.west_active = True
         self._stop = Event()
-        self.update_cycle = update
-        self.log.log_tcc_status("Track", "info",
-                                "Setting up track on object %s"%repr(self.coords))
         Thread.__init__(self)
 
+    def _offset(self,tilt):
+        #state = self.drive.get_state()
+        state = {
+        "east_tilt":1.13,
+        "west_tilt":1.13
+        }
+        east_offset = abs(state["east_tilt"]-tilt)
+        west_offset = abs(state["west_tilt"]-tilt)
+        if self.east_active and self.west_active:
+            return max(east_offset,west_offset)
+        elif self.east_active:
+            return east_offset
+        elif self.west_active:
+            return west_offset
+        else:
+            raise Exception("Both arms disabled")
+
+    def _predict_drive_time(self,t):
+        date = eph.now() + t*eph.second
+        x = self.get_coordinate(date=date)
+        offset = abs(self._offset(x) - self.rate*t)
+        return offset
+        
+    def drive_time(self):
+        opt_result = minimize(self._predict_drive_time,[0.0,],method="TNC")
+        return opt_result["x"]
+            
+    def get_coordinate(self,date=None):
+        #raise NotImplemented("Must use NS or MD tracker")
+        self.coords.compute(date)
+        return self.coords.ns
+        
     def run(self):
         while not self._stop.is_set():
             self.log.log_tcc_status("Track", "info",
                                     "Updating positions for track")
-            self.coords.update()
-            ns = self.coords.ns
-            ew = self.coords.ew
-            self.ns_drive.set_tilts(ns,ns)
-            self.md_drive.set_tilts(ew,ew)
-            sleep(self.update_cycle)
-
+            t = self.drive_time()
+            x = self.get_coordinate(eph.now()+t*eph.seconds)
+            if self.east_active and self.west_active:
+                self.drive.set_tilts(x,x)
+            elif self.east_active:
+                self.drive.set_east_tilt(x)
+            elif self.west_active:
+                self.drive.set_west_tilt(x)
+            else:
+                raise Exception("Both arms disabled")
+            sleep(t)
+            
     def end(self):
-        self.log.log_tcc_status("Track", "info",
-                                "Ending track and stopping drives")
-        self.event.set()
-        self.ns_drive.stop()
-        self.md_drive.stop()
+        self._stop.set()
+        self.drive.stop()
+        
+
+class NSTracker(BaseTracker):
+    def __init__(self, drive, coords, rate, east_active=True, west_active=True):
+        BaseTracker.__init__(self,drive, coords, rate, east_active, west_active)
+        
+    def get_coordinate(self,date=None):
+        self.coords.compute(date)
+        return self.coords.ns
+    
+
+class MDTracker(BaseTracker):
+    def __init__(self, drive, coords, rate, east_active=True, west_active=True):
+        BaseTracker.__init__(self,drive, coords, rate, east_active, west_active)
+        
+    def get_coordinate(self,date=None):
+        self.coords.compute(date)
+        return self.coords.ew
 
 
 class TelescopeController(object):
