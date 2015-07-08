@@ -30,8 +30,8 @@ MD_MIN_COUNTS = config.getfloat("DriveParameters","md_minimum_counts")
 MD_SLOW_COUNTS = config.getfloat("DriveParameters","md_slow_counts")
 FAST = 0
 SLOW = 1
-EAST = 1
-WEST = 0 
+EAST = 0
+WEST = 1 
 NORTH = 0
 SOUTH = 1
 
