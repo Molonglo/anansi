@@ -168,6 +168,12 @@ class DriveInterface(object):
         self.active_thread = None
         self.event.clear()
         self._close_client()
+
+    def active(self):
+         if self.active_thread:
+             return self.active_thread.is_alive()
+         else:
+             return False
         
     def _drive_thread(self):
         """A thread to handle the eZ80 status loop while driving.                                  

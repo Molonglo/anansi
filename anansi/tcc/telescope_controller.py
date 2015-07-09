@@ -115,7 +115,7 @@ class BaseTracker(Thread):
             date = eph.now() + dt*eph.second
             self.coords.compute(date)
             self.set_tilts(getattr(self.coords,self.nsew))
-            while self.drives.active() and not self._stop.is_set():
+            while self.drive.active() and not self._stop.is_set():
                 sleep(1)
             
     def track(self):
