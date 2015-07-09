@@ -12,6 +12,7 @@ from lxml import etree
 from anansi.utils import gen_xml_element
 from anansi.logging_db import MolongloLoggingDataBase as LogDB
 from anansi.tcc.drives import NSDriveInterface,MDDriveInterface
+from scipy.optimize import minimize
 import ephem as eph
 
 WIND_STOW_NSEW = (0.0,0.0)              
@@ -19,52 +20,99 @@ MAINTENANCE_STOW_NSEW = (d2r(45.0),0.0)
 NS_RATE = 0.0001
 MD_RATE = 0.0001
 
-class BaseTracker(Thread):
-    def __init__(self, drive, coords, rate, east_active=True, west_active=True):
+class DrivePredictor(object):
+    def __init__(self,name,coord,rate,preempt=2.0):
+        self.coords = coords
+        self.rate = rate
+        self.name = name
+        self._pos = None
+        self.preempt = preempt
+
+    def _offset(self,t):
+        date = eph.now() + (t+self.preempt)*eph.second
+        self.coords.compute(date=date)
+        x = getattr(self.coords,self.name)
+        offset = abs(x-self._pos)
+        return abs(offset - self.rate*t)
+
+    def predict(self,pos):
+        self._pos = pos
+        opt_result = minimize(self._offset,[0.0,],method="TNC")
+        t = opt_result["x"]
+        date = eph.now() + t*eph.second
+        self.coords.compute(date=date)
+        return getattr(self.coords,self.name)
+
+
+class Tracker(Thread):
+    def __init__(self, drive, predictor, east_active=True, west_active=True):
         self.drive = drive
         self.coords = coords
         self.rate = rate
         self.east_active = True
         self.west_active = True
+        self.predictor = predictor
         self._stop = Event()
         Thread.__init__(self)
 
-    def _offset(self,tilt):
-        #state = self.drive.get_state()
-        state = {
-        "east_tilt":1.13,
-        "west_tilt":1.13
-        }
+    def _get_tilt(self,tilt):
+        state = self.drive.get_state()
         east_offset = abs(state["east_tilt"]-tilt)
         west_offset = abs(state["west_tilt"]-tilt)
         if self.east_active and self.west_active:
-            return max(east_offset,west_offset)
+            if east_offset > west_offset:
+                return state["east_tilt"]
+            else: 
+                return state["west_tilt"]
         elif self.east_active:
-            return east_offset
+            return state["east_tilt"]
         elif self.west_active:
-            return west_offset
+            return state["west_tilt"]
         else:
             raise Exception("Both arms disabled")
+        
+    def on_source(self):
+        pass
 
-    def _predict_drive_time(self,t):
-        date = eph.now() + t*eph.second
-        x = self.get_coordinate(date=date)
-        offset = abs(self._offset(x) - self.rate*t)
-        return offset
         
-    def drive_time(self):
-        opt_result = minimize(self._predict_drive_time,[0.0,],method="TNC")
-        return opt_result["x"]
+    def set_tilt(self,x):
+        if self.east_active and self.west_active:
+            self.drive.set_tilts(x,x)
+        elif self.east_active:
+            self.drive.set_east_tilt(x)
+        elif self.west_active:
+            self.drive.set_west_tilt(x)
+        else:
+            raise Exception("Both arms disabled")
+          
+    def slew(self):
+        while not self._stop.is_set():
+            if self.on_source():
+                break
+            if not self.drive.slewing.is_set():
+                tilt = self._get_tilt(self)
+                x = self.predictor.predict(tilt)
+                self.set_tilt(x)
+            sleep(1)
+
+    def track(self):
+        while not self._stop.is_set():
+            if not self.on_source():
+                self.slew()
+                continue
             
-    def get_coordinate(self,date=None):
-        #raise NotImplemented("Must use NS or MD tracker")
-        self.coords.compute(date)
-        return self.coords.ns
         
+
+            
     def run(self):
+        
+        self.slew()
+        self.track()
         while not self._stop.is_set():
             self.log.log_tcc_status("Track", "info",
                                     "Updating positions for track")
+            
+
             t = self.drive_time()
             x = self.get_coordinate(eph.now()+t*eph.seconds)
             if self.east_active and self.west_active:
@@ -79,6 +127,7 @@ class BaseTracker(Thread):
             
     def end(self):
         self._stop.set()
+        sleep(1)
         self.drive.stop()
         
 
