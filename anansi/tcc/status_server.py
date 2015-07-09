@@ -5,6 +5,8 @@ from lxml import etree
 from anansi.utils import gen_xml_element
 from anansi.logging_db import MolongloLoggingDataBase as LogDB
 from anansi import exit_funcs
+import ephem as eph
+import copy
 
 STATUS_DICT_DEFAULTS = {
     "at_limits":False,
@@ -18,10 +20,12 @@ STATUS_DICT_DEFAULTS = {
     "HA":"",
     "Glat":"",
     "Glon":"",
+    "Elat":"",
+    "Elon":"",
     "Alt":"",
     "Az":"",
     "NS":"",
-    "MD":"",
+    "EW":"",
     "LMST":"",
     "west_ns_tilt":"",
     "west_ns_count":0,
@@ -74,6 +78,32 @@ class StatusServer(TCPServer):
             new_key = "_ns_".join(key.split("_"))
             self.status_dict[new_key] = val
             print new_key,val
+        status = self.controller.md_drive.get_status()
+        for key,val in status.items():
+            new_key = "_md_".join(key.split("_"))
+            self.status_dict[new_key] = val
+            print new_key,val
+        print
+        print "Coordinates:",self.controller.coordinates
+        print    
+        if self.controller.coordinates is not None:
+            coords = copy.copy(self.controller.coordinates)
+            coords.compute()
+            pos_dict = {
+                "RA":str(coords.ra),
+                "Dec":str(coords.dec),
+                "HA":str(coords.ha),
+                "Glat":str(coords.glat),
+                "Glon":str(coords.glon),
+                "Elat":str(coords.elat),
+                "Elon":str(coords.elon),
+                "Alt":str(coords.alt),
+                "Az":str(coords.az),
+                "NS":str(coords.ns),
+                "EW":str(coords.ew),
+                "LMST":str(coords.lst)
+                }
+            self.status_dict.update(pos_dict)
 
     def _xml_from_key(self,key):
         return gen_xml_element(key,str(self.status_dict[key]))
@@ -97,7 +127,7 @@ class StatusServer(TCPServer):
         request.append(self._xml_from_key("Alt"))
         request.append(self._xml_from_key("Az"))
         request.append(self._xml_from_key("NS"))
-        request.append(self._xml_from_key("MD"))
+        request.append(self._xml_from_key("EW"))
         request.append(self._xml_from_key("LMST"))
         root.append(request)
 

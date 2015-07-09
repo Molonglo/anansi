@@ -19,8 +19,7 @@ COORD_SYSTEMS = {
 UNITS = {
     "hhmmss":"00:00:00",
     "degrees":"0.0",
-    "radians":"0.0",
-    "counts":"0"
+    "radians":"0.0"
 }
 
 class LabeledCheckButton(tk.Frame):
@@ -86,7 +85,7 @@ class ParamController(tk.Frame):
             return True
         elif value:
             c = value[-1]
-            if c.isdigit() or c in [":","."]:
+            if c.isdigit() or c in [":",".","-"]:
                 self.set_bg('white')
                 return True
             else:
@@ -139,8 +138,6 @@ class CoordController(tk.Frame):
 
     def units_callback(self,*args,**kwargs):
         units = self.units.get()
-        if units == "counts":
-            self.set_system("nsew")
 
     def system_callback(self,*args,**kwargs):
         system = self.system.get()
@@ -168,9 +165,9 @@ class Controls(tk.Frame):
         tk.Button(self,text="Close",command=self.close).pack(side=tk.LEFT)
         
     def send_recv_anansi(self,msg):
-        client = TCPClient(self.anansi_ip,self.anansi_port,timeout=5.0)
         print "Sending:"
         print repr(msg)
+        client = TCPClient(self.anansi_ip,self.anansi_port,timeout=5.0)
         client.send(str(msg))
         response = client.receive()
         client.close()
@@ -184,6 +181,7 @@ class Controls(tk.Frame):
     def recv_status(self):
         client = TCPClient(self.status_ip,self.status_port,timeout=5.0)
         response = client.receive()
+        print response
         try:
             xml = etree.fromstring(response)
             print etree.tostring(xml,encoding='ISO-8859-1',pretty_print=True)

@@ -1,7 +1,6 @@
 from threading import Thread,Event
 from Queue import Queue
 import anansi.utils
-from anansi.tcc.coordinates import Coordinates
 from anansi.utils import d2r,r2d
 from struct import pack,unpack
 from time import sleep,time
@@ -11,16 +10,16 @@ import logging
 from lxml import etree
 from anansi.utils import gen_xml_element
 from anansi.logging_db import MolongloLoggingDataBase as LogDB
-from anansi.tcc.drives import NSDriveInterface,MDDriveInterface
-from scipy.optimize import minimize
+from anansi.tcc.drives import NSDriveInterface,MDDriveInterface,CountError
+from scipy.optimize import fmin
 import copy
 import ephem as eph
 
 WIND_STOW_NSEW = (0.0,0.0)              
 MAINTENANCE_STOW_NSEW = (d2r(45.0),0.0) 
-NS_RATE = 0.0001
-EW_RATE = 0.0001
-NS_TOLERANCE = 0.0001
+NS_RATE = 0.001454
+EW_RATE = 0.000727
+NS_TOLERANCE = 0.0002
 EW_TOLERANCE = 0.0001
 
 class BaseTracker(Thread):
@@ -33,13 +32,12 @@ class BaseTracker(Thread):
         self.nsew = nsew
         self.east_active = True
         self.west_active = True
-        self.predictor = predictor
         self._stop = Event()
         self.tolerance = tolerance
         Thread.__init__(self)
 
     def _max_tilt_offset(self,tilt):
-        state = self.drive.get_state()
+        state = self.drive.get_status()
         if self.east_active and self.west_active:
             east_offset = abs(state["east_tilt"]-tilt)
             west_offset = abs(state["west_tilt"]-tilt)
@@ -59,6 +57,7 @@ class BaseTracker(Thread):
         x = getattr(self.coords,self.nsew)
         tilt = self._max_tilt_offset(x)
         offset = abs(tilt-x)
+        print "\n%s drive furthest tilt: %f,   desired: %f,   offset: %f\n"%(self.nsew,tilt,x,offset)
         return offset<=self.tolerance
 
     def __mdt(self,t,*args):
@@ -73,11 +72,8 @@ class BaseTracker(Thread):
     def drive_time(self):
         self.coords.compute()
         tilt = self._max_tilt_offset(self.coords.ns)
-        result = minimize(self._mdt,[0.0,],args=(tilt,),method="TNC")
-        if result["success"]:
-            return abs(result["x"])
-        else:
-            return 0.0
+        return fmin(self.__mdt,[0.0,],args=(tilt,))[0]
+        
         
     def __mpd(self,t):
         t = abs(t)
@@ -88,44 +84,40 @@ class BaseTracker(Thread):
         nx = getattr(self.coords,self.nsew)
         return abs(abs(nx-x) - self.tolerance)
 
-    def preempt_time(self):
-        result = minimize(self._mpd,[0.0,],method="TNC")
-        if result["success"]:
-            t = abs(result["x"])
-        else:
-            t = 0.0
-        date = eph.now() + t*eph.second
-        self.coords.compute(date)
-
     def set_tilts(self,tilt):
-        self.log.log_tcc_status(self._name, "info",
-                                "Setting %s tilt to %.5f"%(self.nsew,tilt))
-        if self.east_active and self.west_active:
-            self.drive.set_tilts(tilt,tilt)
-        elif self.east_active:
-            self.drive.set_east_tilt(tilt)
-        elif self.west_active:
-            self.drive.set_west_tilt(tilt)
-        else:
-            raise Exception("Both arms disabled")
+        try:
+            self.log.log_tcc_status(self._name, "info",
+                                    "Setting %s tilt to %.5f"%(self.nsew,tilt))
+            if self.east_active and self.west_active:
+                self.drive.set_tilts(tilt,tilt)
+            elif self.east_active:
+                self.drive.set_east_tilt(tilt)
+            elif self.west_active:
+                self.drive.set_west_tilt(tilt)
+            else:
+                raise Exception("Both arms disabled")
+        except CountError:
+            sleep(2)
+            pass
     
     def slew(self):
-        while not self.on_target() and not self._stop.is_set():
-            dt = self.drive_time()
-            date = eph.now() + dt*eph.second
-            self.coords.compute(date)
-            self.set_tilts(getattr(self.coords,self.nsew))
-            while self.drive.active() and not self._stop.is_set():
-                sleep(1)
-            
+        print "\n%s Slew\n"%(self.nsew)
+        dt = self.drive_time()
+        date = eph.now() + dt*eph.second
+        self.coords.compute(date)
+        self.set_tilts(getattr(self.coords,self.nsew))
+        while self.drive.active() and not self._stop.is_set():
+            sleep(3)
+                        
     def track(self):
         while not self._stop.is_set():
+            print "\n%s Track\n"%(self.nsew)
             if self.on_target():
                 sleep(1)
                 continue
             else:
-                pt = self.preempt_time()
-                date = eph.now() + (pt)*eph.second
+                pt = fmin(self.__mpd,[0.0,])[0]
+                date = eph.now() + pt*eph.second
                 self.coords.compute(date)
                 self.set_tilts(getattr(self.coords,self.nsew))
                 sleep(2)
@@ -170,6 +162,7 @@ class TelescopeController(object):
         self.west_disabled = west_disabled
         self.ns_drive = NSDriveInterface()
         self.md_drive = MDDriveInterface()
+        self.coordinates = None
 
     def clean_up(self):
         self.ns_drive.clean_up()
@@ -203,6 +196,7 @@ class TelescopeController(object):
         self.md_drive.stop()
         
     def track(self,coordinates):
+        self.coordinates = coordinates
         self.end_current_track()
         self.current_track = Tracker(self.ns_drive,self.md_drive,coordinates)
         
@@ -228,6 +222,7 @@ class TelescopeController(object):
         self.md_drive.set_tilts(ew,ew)
 
     def drive_to(self,coordinates):
+        self.coordinates = coordinates
         self.end_current_track()
         coordinates.compute()
         self.log.log_tcc_status(

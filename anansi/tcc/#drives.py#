@@ -119,19 +119,18 @@ class DriveInterface(object):
         self.west_disabled = False
 
     def _open_client(self):
-        try:
-            self.client = TCPClient(self._ip,self._port,timeout=self.timeout)
-        except Exception as e:
-            self.log.log_tcc_status("BaseDriveInterface._open_client: %s:%d"%(self._ip,self._port),
-                                    "error", str(e))
-            raise e
+        if self.client is None:
+            try:
+                self.client = TCPClient(self._ip,self._port,timeout=self.timeout)
+            except Exception as e:
+                self.log.log_tcc_status("BaseDriveInterface._open_client: %s:%d"%(self._ip,self._port),
+                                        "error", str(e))
+                raise e
 
     def _close_client(self):
-        try:
+        if self.client is not None:
             self.client.close()
             self.client = None
-        except:
-            pass
 
     def _receive_message(self):
         response = self.client.receive(self.header_size)
@@ -267,7 +266,7 @@ class DriveInterface(object):
                                                                                                    
         Returns: Status dictionary                                                                 
         """
-        if not self.active():
+        if not self.active_thread:
             self._open_client()
             self._send_message("U",None)
             code = None
@@ -357,10 +356,6 @@ class DriveInterface(object):
                   force_east_slow=False,force_west_slow=False):
         """Set the tilts of the E and W arm NS drives."""
         east_count,west_count = self.tilts_to_counts(east_tilt,west_tilt)
-        print self.__class__.__name__ 
-        print "Etilt %f --> Ecount %d"%(east_tilt,east_count)
-        print "Wtilt %f --> Wcount %d"%(west_tilt,west_count)
-
         self.set_tilts_from_counts(east_count,west_count,
                                    force_east_slow,force_west_slow)
 

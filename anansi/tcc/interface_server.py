@@ -4,7 +4,7 @@ from time import sleep
 from lxml import etree
 from anansi import exit_funcs
 from anansi.comms import TCPServer,BaseHandler
-from anansi.tcc.coordinates import Coordinates
+from anansi.tcc.coordinates import make_coordinates
 from anansi.tcc.telescope_controller import TelescopeController
 from anansi.logging_db import MolongloLoggingDataBase as LogDB
 
@@ -132,26 +132,16 @@ class TCCServer(TCPServer):
                     info = request.tcc_info
                     self.log.log_tcc_status("TCCServer.parse_message","info",
                                             "Received pointing command: %s"%repr(info))
-                    if info["units"] == "counts":
-                        if info["system"] != "nsew":
-                            raise Exception("Can only point in nsew coordinates when given counts")
-                        else:
-                            self.controller.ns_drive.set_tilts_from_counts(
-                                int(info["x"]),int(info["y"]),
-                                force_east_slow=request.force_east_slow,
-                                force_west_slow=request.force_west_slow)
-                            #MD drive command will go here when MD drive implemented
+                    coords = make_coordinates(info["x"],info["y"],system=info["system"],
+                                              units=info["units"],epoch=info["epoch"])
+                    if info["tracking"]:
+                        self.log.log_tcc_status("TCCServer.parse_message","info",
+                                                "Requesting source track")
+                        self.controller.track(coords)
                     else:
-                        coords = Coordinates(info["x"],info["y"],system=info["system"],
-                                             units=info["units"],epoch=info["epoch"])
-                        if info["tracking"]:
-                            self.log.log_tcc_status("TCCServer.parse_message","info",
-                                                    "Requesting source track")
-                            self.controller.track(coords)
-                        else:
-                            self.log.log_tcc_status("TCCServer.parse_message","info",
-                                                    "Requesting drive to source")
-                            self.controller.drive_to(coords)
+                        self.log.log_tcc_status("TCCServer.parse_message","info",
+                                                "Requesting drive to source")
+                        self.controller.drive_to(coords)
         
                 elif request.tcc_command == "wind_stow":
                     print

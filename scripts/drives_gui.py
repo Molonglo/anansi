@@ -81,7 +81,7 @@ class ParamController(tk.Frame):
 
 
 class CoordController(tk.Frame):
-    def __init__(self,parent):
+    def __init__(self,parent,default):
         tk.Frame.__init__(self,parent)
         tk.Label(self,text="Counts").pack(side=tk.TOP)
         
@@ -92,9 +92,9 @@ class CoordController(tk.Frame):
         
         x,y = ["East","West"]
         self.xy_frame = tk.Frame(self)
-        self.x_coord = ParamController(self.xy_frame,x,"0")
+        self.x_coord = ParamController(self.xy_frame,x,default)
         self.x_coord.pack()
-        self.y_coord = ParamController(self.xy_frame,y,"0")
+        self.y_coord = ParamController(self.xy_frame,y,default)
         self.y_coord.pack()
         self.xy_frame.pack(side=tk.LEFT,pady=1)
                 
@@ -177,13 +177,13 @@ class MDControls(NSControls):
 
 
 class DriveGui(tk.Frame):
-    def __init__(self,parent,drive,control_class):
+    def __init__(self,parent,drive,control_class,default):
         tk.Frame.__init__(self,parent)
         tk.Label(self,text=control_class.__name__).pack(side=tk.TOP)
         self.drive = drive
         self.parent = parent
         frame = tk.Frame(self)
-        self.coord = CoordController(frame)
+        self.coord = CoordController(frame,default)
         self.coord.pack(side=tk.LEFT)
         self.arms = Arms(frame)
         self.arms.pack(side=tk.LEFT)
@@ -199,9 +199,9 @@ if __name__ == "__main__":
     
     root = tk.Tk()
     ns_drive = NSDriveInterface()
-    ui = DriveGui(root,ns_drive,NSControls)
+    ui = DriveGui(root,ns_drive,NSControls,"32768")
     ui.pack()
     md_drive = MDDriveInterface()
-    ui = DriveGui(root,md_drive,MDControls)
+    ui = DriveGui(root,md_drive,MDControls,"8388608")
     ui.pack()
     root.mainloop()

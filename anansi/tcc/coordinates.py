@@ -33,10 +33,27 @@ class CoordinatesMixin(object):
         eq = eph.Equatorial(self.a_ra,self.a_dec,epoch=self._epoch)
         gal = eph.Galactic(eq)
         self.glat = gal.lat
-        self.glon = gal.lon
+        self.glon = gal.long
         ecl = eph.Ecliptic(eq)
         self.elat = ecl.lat
-        self.elon = ecl.lon
+        self.elon = ecl.long
+
+    def _convert(self):
+        def _to_type(_type,name):
+            val = getattr(self,name)
+            if not isinstance(val,eph.Angle):
+                setattr(self,name,_type(val))
+        _to_type(eph.degrees,"ns")
+        _to_type(eph.degrees,"ew")
+        _to_type(eph.hours,"ra")
+        _to_type(eph.degrees,"dec")
+        _to_type(eph.degrees,"ha")
+        _to_type(eph.degrees,"glat")
+        _to_type(eph.degrees,"glon")
+        _to_type(eph.degrees,"elat")
+        _to_type(eph.degrees,"elon")
+        _to_type(eph.degrees,"az")
+        _to_type(eph.degrees,"alt")
         
     def is_up(self,date=None):
         self.compute(date)
@@ -58,6 +75,7 @@ class RADecCoordinates(eph.FixedBody,CoordinatesMixin):
         self.ha = self.lst - self.ra
         self.ns,self.ew = hadec_to_nsew(self.ha,self.dec)
         self.generate_other_systems()
+        #self._convert()
     
 
 class NSEWCoordinates(eph.FixedBody,CoordinatesMixin):
@@ -75,7 +93,7 @@ class NSEWCoordinates(eph.FixedBody,CoordinatesMixin):
         self._ra = self.lst - self.ha
         eph.FixedBody.compute(self,most)
         self.generate_other_systems()
-
+        #self._convert()
 
 class BodyCoordinates(eph.FixedBody,CoordinatesMixin):
     def __init__(self,body,epoch=eph.J2000):
@@ -94,7 +112,7 @@ class BodyCoordinates(eph.FixedBody,CoordinatesMixin):
         self.ha = self.lst - self.a_ra
         self.ns,self.ew = hadec_to_nsew(self.ha,self.a_dec)
         self.generate_other_systems()
-
+        #self._convert()
 
 def make_coordinates(x,y,system="equatorial",units="hhmmss",epoch="J2000"):
     system = system.lower()
@@ -111,15 +129,21 @@ def make_coordinates(x,y,system="equatorial",units="hhmmss",epoch="J2000"):
     
     try:
         if units == "degrees":
-            x = eph.degrees(d2r(x))
-            y = eph.degrees(d2r(y))
+            x = eph.degrees(d2r(float(x)))
+            y = eph.degrees(d2r(float(y)))
+        elif units == "radians":
+            x = eph.degrees(float(x))
+            y = eph.degrees(float(x))
         elif units == "hhmmss":
-            if self.system in ["equatorial_ha","equatorial"]:
+            if system in ["equatorial_ha","equatorial"]:
                 x = eph.hours(x)
             else:
                 x = eph.degrees(x)
                 y = eph.degrees(y)
+        else:
+            raise Exception("Invalid units. Must be degrees, radians or hhmmss.")
     except Exception as error:
+        print str(error)
         raise Exception("Invalid coordinates: %s, %s"%(x,y))
 
     if system in ["equatorial","radec"]:
