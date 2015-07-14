@@ -8,7 +8,7 @@ import ctypes as C
 import numpy as np
 import logging
 from lxml import etree
-from anansi.utils import gen_xml_element,nb_sleep
+from anansi.utils import gen_xml_element
 from anansi.logging_db import MolongloLoggingDataBase as LogDB
 from anansi.tcc.drives import NSDriveInterface,MDDriveInterface,CountError
 from anansi.tcc.coordinates import make_coordinates
@@ -29,7 +29,7 @@ EW_TOLERANCE = 0.0001
 # (should be slew only,)
 #
 
-class Tracker(Thread):
+class BaseTracker(Thread):
     def __init__(self,coords,drive,tolerance,track=True):
         self.log = LogDB()
         self.drive = drive
@@ -94,7 +94,7 @@ class Tracker(Thread):
             tilt = self.get_coord(date=date)
             self.set_tilt(tilt)
         while self.drive.is_moving() and not self._stop.is_set():
-            nb_sleep(1,5,self._stop)
+            sleep(1)
             self.update()
 
     def preemt_minfunc(self,dt):
@@ -114,7 +114,7 @@ class Tracker(Thread):
         while not self._stop.is_set():
             if not self.on_target:
                 self.slew()
-            nb_sleep(1,5,self._stop)
+            sleep(1)
 
     def set_tilt(self,tilt):
         try:
@@ -129,7 +129,7 @@ class Tracker(Thread):
         self.drive.stop()
 
 
-class NSTracker(Tracker):
+class NSTracker(BaseTracker):
     def __init__(self, drive, coords):
         BaseTracker.__init__(self, drive, coords, NS_TOLERANCE)
 
