@@ -3,12 +3,8 @@ import ephem as eph
 import numpy as np
 from anansi.utils import d2r,r2d
 from anansi.coords import nsew_to_hadec,hadec_to_nsew,azel_to_nsew,nsew_to_azel
-import os
-from ConfigParser import ConfigParser
+from anansi.config import config
 
-config_path = os.environ["ANANSI_CONFIG"]
-config = ConfigParser()
-config.read(os.path.join(config_path,"anansi.cfg"))
 MOL_LAT = config.getfloat("MolongloEphemeris","latitude")
 MOL_LON = config.getfloat("MolongloEphemeris","longitude")
 MOL_ELV = config.getfloat("MolongloEphemeris","elevation")
@@ -27,6 +23,8 @@ class Molonglo(eph.Observer):
         self.horizon   = d2r(MOL_HOR)
         self.compute_pressure()
 
+    def sidereal_time(self):
+        return ((super(Molonglo,self).sidereal_time()*10)%(np.pi*2))
 
 class CoordinatesMixin(object):
     def generate_other_systems(self):
@@ -58,8 +56,8 @@ class CoordinatesMixin(object):
     def is_up(self,date=None):
         self.compute(date)
         return self.alt > MOL_HOR
-        
-
+    
+    
 class RADecCoordinates(eph.FixedBody,CoordinatesMixin):
     def __init__(self,ra,dec,epoch=eph.J2000):
         self._ra = ra
@@ -75,8 +73,7 @@ class RADecCoordinates(eph.FixedBody,CoordinatesMixin):
         self.ha = self.lst - self.ra
         self.ns,self.ew = hadec_to_nsew(self.ha,self.dec)
         self.generate_other_systems()
-        #self._convert()
-    
+        self._convert()
 
 class NSEWCoordinates(eph.FixedBody,CoordinatesMixin):
     def __init__(self,ns,ew):
@@ -93,7 +90,7 @@ class NSEWCoordinates(eph.FixedBody,CoordinatesMixin):
         self._ra = self.lst - self.ha
         eph.FixedBody.compute(self,most)
         self.generate_other_systems()
-        #self._convert()
+        self._convert()
 
 class BodyCoordinates(eph.FixedBody,CoordinatesMixin):
     def __init__(self,body,epoch=eph.J2000):
@@ -112,7 +109,7 @@ class BodyCoordinates(eph.FixedBody,CoordinatesMixin):
         self.ha = self.lst - self.a_ra
         self.ns,self.ew = hadec_to_nsew(self.ha,self.a_dec)
         self.generate_other_systems()
-        #self._convert()
+        self._convert()
 
 def make_coordinates(x,y,system="equatorial",units="hhmmss",epoch="J2000"):
     system = system.lower()
@@ -179,6 +176,10 @@ def make_body(name,epoch="J2000"):
     return BodyCoordinates(body,epoch)
     
 
+# Old conversion code for ns ew from ha dec
+# A version of this is retained as a standard 
+# against which to test the telescope coordinate 
+# conversion
 def get_nsew(a_dec,ha):
     ew = np.arcsin((0.9999940546 * np.cos(a_dec) * np.sin(ha))
                    - (0.0029798011806 * np.cos(a_dec) * np.cos(ha))

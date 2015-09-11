@@ -1,5 +1,6 @@
 import logging
 import inspect
+from functools import wraps
 
 def try_and_log(*exceptions):
     def decorator(func):

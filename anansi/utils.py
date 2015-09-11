@@ -4,6 +4,7 @@ import ctypes as C
 from struct import unpack,pack
 from lxml import etree
 from numpy import pi
+from time import sleep
  
 class CustomTimer(_Timer):
     def __init__(self,interval,func,*args,**kwargs):
@@ -62,3 +63,11 @@ def d2r(val):
 
 def r2d(val):
     return 180.*val/pi
+
+def nb_sleep(duration,ncycle,event):
+    for _ in range(ncycle):
+        if event.is_set():
+            break
+        sleep(duration)
+        
+

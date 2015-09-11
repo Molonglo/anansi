@@ -1,17 +1,13 @@
-from anansi.logging_db import MolongloLoggingDataBase as LogDB
-from anansi.comms import TCPClient
-from anansi import exit_funcs
 from threading import Thread,Event
 from time import sleep
 from struct import pack,unpack
 from anansi import codec
-from os import environ,path
 from numpy import sin,arcsin
-from ConfigParser import ConfigParser
+from anansi.anansi_logging import DataBaseLogger as LogDB
+from anansi.comms import TCPClient
+from anansi import exit_funcs
+from anansi.config import config
 
-config_path = environ["ANANSI_CONFIG"]
-config = ConfigParser()
-config.read(path.join(config_path,"anansi.cfg"))
 NS_CONTROLLER_IP = config.get("IPAddresses","ns_controller_ip")
 NS_CONTROLLER_PORT = config.getint("IPAddresses","ns_controller_port")
 NS_NODE_NAME = config.get("DriveParameters","ns_node_name")
@@ -28,12 +24,35 @@ MD_EAST_SCALING = config.getfloat("DriveParameters","md_east_scaling")
 MD_TILT_ZERO = config.getfloat("DriveParameters","md_tilt_zero")
 MD_MIN_COUNTS = config.getfloat("DriveParameters","md_minimum_counts")
 MD_SLOW_COUNTS = config.getfloat("DriveParameters","md_slow_counts")
-FAST = 0
-SLOW = 1
-EAST = 0
-WEST = 1 
-NORTH = 0
-SOUTH = 1
+
+# eZ80 flags for drive controller
+DRIVE_FAST = 0
+DRIVE_SLOW = 1
+DRIVE_EAST = 0
+DRIVE_WEST = 1 
+DRIVE_NORTH = 0
+DRIVE_SOUTH = 1
+
+# eZ80 arm codes
+BOTH_ARMS = "1"
+EAST_ARM = "2"
+WEST_ARM = "3"
+
+# Drive States
+# Drives support three states for each arm: auto, slow and disabled
+AUTO = "auto"
+SLOW = "slow"
+DISABLED = "disabled"
+VALID_STATES = [AUTO,SLOW,DISABLED]
+
+#Drive rates
+#These should be independently calibrated for each arm
+NS_EAST_RATE = 0.001454
+NS_WEST_RATE = 0.001454
+NS_SLOW_FACTOR = 0.5
+MD_EAST_RATE = 0.000727
+MD_WEST_RATE = 0.000727
+MD_SLOW_FACTOR = 0.5
 
 class eZ80Error(Exception):
     """Generic exception returned from eZ80
@@ -92,8 +111,8 @@ class DriveInterface(object):
         decoder,size = codec.gen_header_decoder(self._node)
         self.header_decoder = decoder
         self.header_size = size
-        self.west_disabled = False
-        self.east_disabled = False
+        self.west_state = AUTO
+        self.east_state = AUTO
         self.active_thread = None
         self.event = Event()
         self.status_dict = {}
@@ -106,24 +125,33 @@ class DriveInterface(object):
         self.stop()
         self.exit_funcs.deregister(self.clean_up)
 
-    def disable_east_arm(self):
-        self.east_disabled = True
+    def _check_state(self,state):
+        if state not in VALID_STATES:
+            raise Exception(
+                "Invalid state: %s.\nValid states are: %s"%(
+                    state,VALID_STATES))
+        
+    def set_east_state(self,state):
+        self._check_state(state)
+        self.east_state = state
 
-    def disable_west_arm(self):
-        self.west_disabled = True
+    def set_west_state(self,state):
+        self._check_state(state)
+        self.west_state = state
 
-    def enable_east_arm(self):
-        self.east_disabled = False
-
-    def enable_west_arm(self):
-        self.west_disabled = False
+    def get_east_state(self):
+        return self.east_state
+    
+    def get_west_state(self):
+        return self.west_state
 
     def _open_client(self):
         try:
             self.client = TCPClient(self._ip,self._port,timeout=self.timeout)
         except Exception as e:
-            self.log.log_tcc_status("BaseDriveInterface._open_client: %s:%d"%(self._ip,self._port),
-                                    "error", str(e))
+            self.log.log_tcc_status(
+                "BaseDriveInterface._open_client: %s:%d"%(self._ip,self._port),
+                "error", str(e))
             raise e
 
     def _close_client(self):
@@ -135,8 +163,11 @@ class DriveInterface(object):
 
     def _receive_message(self):
         response = self.client.receive(self.header_size)
+        print response
         header = codec.simple_decoder(response,self.header_decoder)
+        print header
         data_size = header["HOB"]*256+header["LOB"]
+        print data_size
         if data_size > 0:
             data = self.client.receive(data_size)
         else:
@@ -292,11 +323,7 @@ class DriveInterface(object):
             code,_ = self._parse_message(*self._receive_message())
         self._close_client()
 
-    def _get_direction(self,offset):
-        return 1 if offset >= 0 else 0
-
-    def _prepare(self,east_counts=None,west_counts=None,
-                 force_east_slow=False,force_west_slow=False):
+    def _prepare(self,east_counts=None,west_counts=None):
         """Prepare values for drive message.                                                       
                                                                                                    
         Notes: This method is used to translate counts to directions                               
@@ -318,10 +345,10 @@ class DriveInterface(object):
             east_dir = self._get_direction(east_offset)
             if abs(east_offset) <= self._minimum_count_limit:
                 east_speed = None
-            elif abs(east_offset) <= self._slow_drive_limit or force_east_slow:
-                east_speed = SLOW
+            elif abs(east_offset) <= self._slow_drive_limit or self.east_state == SLOW:
+                east_speed = DRIVE_SLOW
             else:
-                east_speed = FAST
+                east_speed = DRIVE_FAST
         else:
             east_dir = None
             east_speed = None
@@ -331,10 +358,10 @@ class DriveInterface(object):
             west_dir = self._get_direction(west_offset)
             if abs(west_offset) <= self._minimum_count_limit:
                 west_speed = None
-            elif abs(west_offset) <= self._slow_drive_limit or force_west_slow:
-                west_speed = SLOW
+            elif abs(west_offset) <= self._slow_drive_limit or self.west_state == SLOW:
+                west_speed = DRIVE_SLOW
             else:
-                west_speed = FAST
+                west_speed = DRIVE_FAST
         else:
             west_dir = None
             west_speed = None
@@ -353,90 +380,85 @@ class DriveInterface(object):
         west_tilt = (west_counts-self._tilt_zero)/self._east_scaling
         return east_tilt,west_tilt
 
-    def set_tilts(self,east_tilt,west_tilt,
-                  force_east_slow=False,force_west_slow=False):
+    def set_tilts(self,east_tilt,west_tilt):
         """Set the tilts of the E and W arm NS drives."""
         east_count,west_count = self.tilts_to_counts(east_tilt,west_tilt)
         print self.__class__.__name__ 
         print "Etilt %f --> Ecount %d"%(east_tilt,east_count)
         print "Wtilt %f --> Wcount %d"%(west_tilt,west_count)
+        self.set_tilts_from_counts(east_count,west_count)
 
-        self.set_tilts_from_counts(east_count,west_count,
-                                   force_east_slow,force_west_slow)
-
-    def set_tilts_from_counts(self,east_count,west_count,
-                              force_east_slow=False,force_west_slow=False):
+    def set_tilts_from_counts(self,east_count,west_count):
         """Set the tilts of the E and W arm NS drives based on encoder counts."""
-        drive_code = "1"
-        if self.west_disabled and self.east_disabled:
+        if self.west_state == DISABLED and self.east_state == DISABLED:
+            # Should log exception
             return
-        elif self.west_disabled:
-            self.set_east_tilt_from_counts(east_count,force_east_slow)
-        elif self.east_disabled:
-            self.set_west_tilt_from_counts(west_count,force_west_slow)
+        elif self.west_state == DISABLED:
+            self.set_east_tilt_from_counts(east_count)
+        elif self.east_state == DISABLED:
+            self.set_west_tilt_from_counts(west_count)
         else:
             encoded_count = codec.it_pack(east_count) + codec.it_pack(west_count)
-            ed,wd,es,ws = self._prepare(east_count,west_count,force_east_slow,force_west_slow)
+            ed,wd,es,ws = self._prepare(east_count,west_count)
             if es is None or ws is None:
                 # if neither arm will move more than 40 counts                                     
                 message = "E or W arm requested move of less than %d counts"%self._minimum_count_limit
                 raise CountError(message,self)
             elif ws is None:
                 # if only east arm is to move                                                      
-                self.set_east_tilt_from_counts(east_count,force_east_slow)
+                self.set_east_tilt_from_counts(east_count)
             elif es is None:
                 # if only west arm is to move                                                      
-                self.set_west_tilt_from_counts(west_count,force_west_slow)
+                self.set_west_tilt_from_counts(west_count)
             else:
                 e_dir_speed = 2*ed + es
                 w_dir_speed = 8*wd + 4*ws
                 encoded_dir_speed = pack("B",e_dir_speed + w_dir_speed)
                 data = encoded_count+encoded_dir_speed
-                self._drive(drive_code,data)
+                self._drive(BOTH_ARMS,data)
 
-    def set_east_tilt(self,east_tilt,force_slow=False):
+    def set_east_tilt(self,east_tilt):
         """Set tilt of east arm."""
         east_count,_ = self.tilts_to_counts(east_tilt,0)
-        self.set_east_tilt_from_counts(east_count,force_slow)
+        self.set_east_tilt_from_counts(east_count)
 
-    def set_east_tilt_from_counts(self,east_count,force_slow=False):
+    def set_east_tilt_from_counts(self,east_count):
         """Set tilt of east arm base on encoder counts."""
-        if self.east_disabled:
+        if self.east_state == DISABLED:
+            # log an error here
             return
         else:
-            drive_code = "2"
             encoded_count = codec.it_pack(east_count)
-            ed,_,es,_ = self._prepare(east_count,None,force_slow,None)
+            ed,_,es,_ = self._prepare(east_count,None)
             if es is None:
-                message = "E or W arm requested move of less than %d counts"%self._minimum_count_limit
+                message = "E arm requested move of less than %d counts"%self._minimum_count_limit
                 raise CountError(message,self)
             else:
                 dir_speed = 2*ed + es
                 encoded_dir_speed = pack("B",dir_speed)
                 data = encoded_count+encoded_dir_speed
-                self._drive(drive_code,data)
+                self._drive(EAST_ARM,data)
 
-    def set_west_tilt(self,west_tilt,force_slow=False):
+    def set_west_tilt(self,west_tilt):
         """Set tilt of west arm."""
         _,west_count = self.tilts_to_counts(0,west_tilt)
-        self.set_west_tilt_from_counts(west_count,force_slow)
+        self.set_west_tilt_from_counts(west_count)
 
-    def set_west_tilt_from_counts(self,west_count,force_slow=False):
+    def set_west_tilt_from_counts(self,west_count):
         """Set tilt of west arm base on encoder counts."""
-        if self.west_disabled:
+        if self.west_state == DISABLED:
             return
         else:
-            drive_code = "3"
             encoded_count = codec.it_pack(west_count)
-            _,wd,_,ws = self._prepare(None,west_count,None,force_slow)
+            _,wd,_,ws = self._prepare(None,west_count)
             if ws is None:
-                message = "E or W arm requested move of less than %d counts"%self._minimum_count_limit
+                message = "W arm requested move of less than %d counts"%self._minimum_count_limit
                 raise CountError(message,self)
             else:
                 dir_speed = 8*wd + 4*ws
                 encoded_dir_speed = pack("B",dir_speed)
                 data = encoded_count+encoded_dir_speed
-                self._drive(drive_code,data)
+                self._drive(WEST_ARM,data)
 
     def _calculate_tilts(self,u_dict):
         """Update status dictionary to converts counts to tilts."""
@@ -471,8 +493,20 @@ class NSDriveInterface(DriveInterface):
             minimum_count_limit,slow_drive_limit,
             timeout)
 
+    def get_east_rate(self):
+        if self.east_state == SLOW:
+            return NS_EAST_RATE * NS_SLOW_FACTOR
+        else:
+            return NS_EAST_RATE
+
+    def get_west_rate(self):
+        if self.west_state == SLOW:
+            return NS_WEST_RATE * NS_SLOW_FACTOR
+        else:
+            return NS_WEST_RATE
+
     def _get_direction(self,offset):
-        return NORTH if offset >= 0 else SOUTH
+        return DRIVE_NORTH if offset >= 0 else DRIVE_SOUTH
 
 
 class MDDriveInterface(DriveInterface):
@@ -500,6 +534,18 @@ class MDDriveInterface(DriveInterface):
             minimum_count_limit,slow_drive_limit,
             timeout)
 
+    def get_east_rate(self):
+        if self.east_state == SLOW:
+            return MD_EAST_RATE * MD_SLOW_FACTOR
+        else:
+            return MD_EAST_RATE
+
+    def get_west_rate(self):
+        if self.west_state == SLOW:
+            return MD_WEST_RATE * MD_SLOW_FACTOR
+        else:
+            return MD_WEST_RATE
+
     def tilts_to_counts(self,east_tilt,west_tilt):
         """Convert tilts in radians to encoder counts."""
         east_counts = int(self._tilt_zero + self._east_scaling * sin(east_tilt))
@@ -513,14 +559,5 @@ class MDDriveInterface(DriveInterface):
         return east_tilt,west_tilt
 
     def _get_direction(self,offset):
-        return WEST if offset >= 0 else EAST
-
-    def zero_meridian_drives(self,arm="B",start=1):
-        self._stop_active_drive()
-        self._open_client()
-        data = arm+pack("B",start)
-        self._send_message("R",data)
-        code = None
-        while code != "S":
-            code,_ = self._parse_message(*self._receive_message())
-        self._close_client()
+        return DRIVE_WEST if offset >= 0 else DRIVE_EAST
+    

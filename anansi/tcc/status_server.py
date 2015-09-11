@@ -3,7 +3,7 @@ from anansi.comms import TCPServer,BaseHandler
 from time import sleep
 from lxml import etree
 from anansi.utils import gen_xml_element
-from anansi.logging_db import MolongloLoggingDataBase as LogDB
+from anansi.anansi_logging import DataBaseLogger as LogDB
 from anansi import exit_funcs
 import ephem as eph
 import copy
@@ -160,11 +160,7 @@ class StatusServer(TCPServer):
         return root
 
 if __name__ == "__main__":
-    import os
-    from ConfigParser import ConfigParser
-    config_path = os.environ["ANANSI_CONFIG"]
-    config = ConfigParser()
-    config.read(os.path.join(config_path,"anansi.cfg"))
+    from anansi.config import config
     STATUS_IP = config.get("IPAddresses","status_ip")
     STATUS_PORT = config.getint("IPAddresses","status_port")
     server = StatusServer(STATUS_IP,STATUS_PORT)

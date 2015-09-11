@@ -1,6 +1,7 @@
 from lxml import etree
 from anansi.comms import TCPClient
 from ConfigParser import ConfigParser
+from anansi.config import config
 import sys
 import os
 
@@ -88,9 +89,4 @@ def point(x,y,system="equatorial",tracking="on",east_arm="enabled",west_arm="ena
 
 
 if __name__ == "__main__":
-    #import ephem as e
-    #eq = e.Equatorial(sys.argv[1],sys.argv[2])
-    point(sys.argv[1],sys.argv[2],
-          system="equatorial",tracking="off",
-          east_arm="enabled",west_arm="enabled")
-    #shutdown()
+    shutdown()

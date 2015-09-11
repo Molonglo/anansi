@@ -1,4 +1,6 @@
 import Tkinter as tk
+from anansi import args
+from anansi.config import config
 from anansi.ui_tools.dict_controller import DictController
 from anansi.tcc.drives import NSDriveInterface,MDDriveInterface
 from collections import OrderedDict
@@ -23,11 +25,11 @@ class LabeledCheckButton(tk.Frame):
 class ArmController(tk.Frame):
     def __init__(self,parent,label_text):
         tk.Frame.__init__(self,parent)
-        tk.Label(self,text=label_text).pack(side=tk.TOP)
-        self.enabled = LabeledCheckButton(self,"Enable","enabled","disabled")
-        self.speed = LabeledCheckButton(self,"Force slow","slow","auto")
-        self.enabled.pack(side=tk.LEFT)
-        self.speed.pack(side=tk.RIGHT)
+        tk.Label(self,text=label_text).pack(side=tk.LEFT)
+        self.state_var = tk.StringVar()
+        self.state_menu = tk.OptionMenu(self, self.state_var, "auto", "slow", "disabled")
+        self.state_var.set("auto")
+        self.state_menu.pack(side=tk.RIGHT)
         
 
 class Arms(tk.Frame):
@@ -121,22 +123,15 @@ class NSControls(tk.Frame):
         print self.drive.get_status()
 
     def drive_to(self):
-        east_arm = self.east_arm.enabled.get()
-        west_arm = self.west_arm.enabled.get()
-        east_speed = self.east_arm.speed.get()
-        west_speed = self.west_arm.speed.get()
+        east_state = self.east_arm.state_var.get()
+        west_state = self.west_arm.state_var.get()
         east_count,west_count = self.pos.get_xy()
-        east_arm = True if east_arm == "enabled" else False
-        west_arm = True if west_arm == "enabled" else False
-        east_speed = True if east_speed == "slow" else False
-        west_speed = True if west_speed== "slow" else False
-
-        if east_arm and west_arm:
-            self.drive.set_tilts_from_counts(east_count,west_count,east_speed,west_speed)
-        elif east_arm and not west_arm:
-            self.drive.set_east_tilt_from_counts(east_count,east_speed)
-        elif not east_arm and west_arm:
-            self.drive.set_west_tilt_from_counts(east_count,east_speed)
+        if east_state!="disabled" and west_state!="disabled":
+            self.drive.set_tilts_from_counts(east_count,west_count)
+        elif east_state!="disabled" and west_arm=="disabled":
+            self.drive.set_east_tilt_from_counts(east_count)
+        elif east_state=="disabled" and west_arm!="disabled":
+            self.drive.set_west_tilt_from_counts(east_count)
         else:
             raise Exception("Both arms disabled")
 
@@ -154,10 +149,10 @@ class MDControls(NSControls):
         tk.Button(self,text="Stop SAZ",command=self.stop_saz).pack(side=tk.LEFT)
         
     def _get_code(self):
-        east_arm = self.east_arm.enabled.get()
-        west_arm = self.west_arm.enabled.get()
-        east_arm = True if east_arm == "enabled" else False
-        west_arm = True if west_arm == "enabled" else False
+        east_state = self.east_arm.state_var.get()
+        west_state = self.west_arm.state_var.get()
+        east_arm = east_state!="disabled"
+        west_arm = west_state!="disabled"
         if east_arm and west_arm:
             code = "B"
         elif east_arm:
@@ -196,7 +191,7 @@ class DriveGui(tk.Frame):
 
 
 if __name__ == "__main__":
-    
+    args.init()
     root = tk.Tk()
     ns_drive = NSDriveInterface()
     ui = DriveGui(root,ns_drive,NSControls,"32768")

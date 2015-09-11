@@ -1,7 +1,0 @@
-[Login]
-user: root
-host: 172.17.227.127
-port: 3306
-password: tcsmysqlpwd
-name: tcc_logging
-

@@ -1,11 +1,11 @@
 import Tkinter as tk
-import os
 from lxml import etree
-from ConfigParser import ConfigParser
+from collections import OrderedDict
+from anansi import args
+from anansi.config import config
+from anansi.comms import TCPClient
 from anansi.tcc.tcc_utils import TCCMessage
 from anansi.ui_tools.dict_controller import DictController
-from anansi.comms import TCPClient
-from collections import OrderedDict
 
 COORD_SYSTEMS = {
     "equatorial":["RA","Dec"],
@@ -42,11 +42,12 @@ class LabeledCheckButton(tk.Frame):
 class ArmController(tk.Frame):
     def __init__(self,parent,label_text):
         tk.Frame.__init__(self,parent)
-        tk.Label(self,text=label_text).pack(side=tk.TOP)
-        self.enabled = LabeledCheckButton(self,"Enable","enabled","disabled")
-        self.speed = LabeledCheckButton(self,"Force slow","slow","auto")
-        self.enabled.pack(side=tk.LEFT)
-        self.speed.pack(side=tk.RIGHT)
+        tk.Label(self,text=label_text).pack(side=tk.LEFT)
+        self.state_var = tk.StringVar()
+        self.state_menu = tk.OptionMenu(self, self.state_var, "auto", "slow", "disabled")
+        self.state_var.set("auto")
+        self.state_menu.pack(side=tk.RIGHT)
+
         
 
 class Arms(tk.Frame):
@@ -163,12 +164,12 @@ class Controls(tk.Frame):
         tk.Button(self,text="Stop",command=self.stop).pack(side=tk.LEFT)
         tk.Button(self,text="Status",command=self.recv_status).pack(side=tk.LEFT)
         tk.Button(self,text="Close",command=self.close).pack(side=tk.LEFT)
-        
+    
     def send_recv_anansi(self,msg):
-        print "Sending:"
         print repr(msg)
         client = TCPClient(self.anansi_ip,self.anansi_port,timeout=5.0)
         client.send(str(msg))
+        print str(msg)
         response = client.receive()
         client.close()
         try:
@@ -197,18 +198,14 @@ class Controls(tk.Frame):
             track = "off"
         else:
             track = "on"
-        east_arm = self.east_arm.enabled.get()
-        west_arm = self.west_arm.enabled.get()
-        east_speed = self.east_arm.speed.get()
-        west_speed = self.west_arm.speed.get()
+        east_state = self.east_arm.state_var.get()
+        west_state = self.west_arm.state_var.get()
         x,y = self.pos.get_xy()
         msg = TCCMessage("tcc_gui")
         msg.tcc_pointing(x,y,system=system,
                          tracking=track,
-                         east_arm=east_arm,
-                         west_arm=west_arm,
-                         east_speed=east_speed,
-                         west_speed=west_speed,                         
+                         east_arm=east_state,
+                         west_arm=west_state,
                          units=units)
         self.send_recv_anansi(msg)
 
@@ -248,16 +245,13 @@ class TCCGraphicalInterface(tk.Frame):
 
 
 if __name__ == "__main__":
-    
-    config_path = os.environ["ANANSI_CONFIG"]
-    config_file = os.path.join(config_path,"anansi.cfg")
-    config = ConfigParser()
-    config.read(config_file)
-    anansi_ip = config.get("IPAddresses","anansi_ip")
-    anansi_port = config.getint("IPAddresses","anansi_port")
+    args.init()
+    tcc_ip = config.get("IPAddresses","tcc_ip")
+    tcc_port = config.getint("IPAddresses","tcc_port")
     status_ip = config.get("IPAddresses","status_ip")
     status_port = config.getint("IPAddresses","status_port")
     root = tk.Tk()
-    ui = TCCGraphicalInterface(root,anansi_ip,anansi_port,status_ip,status_port)
+    ui = TCCGraphicalInterface(root,tcc_ip,tcc_port,status_ip,status_port)
     ui.pack()
     root.mainloop()
+    

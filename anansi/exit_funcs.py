@@ -1,13 +1,10 @@
 import signal
 import sys
 import weakref
-from anansi.logging_db import MolongloLoggingDataBase as LogDB
-# This file contains a dictionary of callbacks 
-# for interrupt and terminate signals
-
-log = LogDB()
+from anansi.anansi_logging import DataBaseLogger as LogDB
 
 def callback(signum,frame):
+    log = LogDB()
     log.log_tcc_status("exit_funcs.callback","debug",
                        "Caught signal %d, running callbacks"%signum)
     while _CALLBACKS:
@@ -17,16 +14,13 @@ def callback(signum,frame):
         except Exception as error:
             log.log_tcc_status("exit_funcs.callback","error",
                                str(error))
+            pass
     sys.exit(0)
 
 def register(func,*args,**kwargs):
-    log.log_tcc_status("exit_funcs.register","debug",
-                       "Registering %s"%(str((func.__name__,args,kwargs))))
     _CALLBACKS.append((func,args,kwargs))
 
 def deregister(func,*args,**kwargs):
-    log.log_tcc_status("exit_funcs.deregister","debug",
-                       "Deregistering %s"%(str((func.__name__,args,kwargs))))
     try:
         _CALLBACKS.remove((func,args,kwargs))
     except ValueError:

@@ -36,18 +36,15 @@ class TCCMessage(object):
         elem.append(self._gen_element("command",text=command))
         self.root.append(elem)
 
-    def tcc_pointing(self,x,y,east_arm="enabled",west_arm="enabled",
-                     east_speed="auto",west_speed="auto",**attributes):
+    def tcc_pointing(self,x,y,east_arm="auto",west_arm="auto",**attributes):
         elem = self._gen_element("tcc_command")
         elem.append(self._gen_element("command",text="point"))
         pointing = self._gen_element("pointing",attributes=attributes)
         pointing.append(self._gen_element("xcoord",text=str(x)))
         pointing.append(self._gen_element("ycoord",text=str(y)))
         arms = self._gen_element("arms")
-        arms.append(self._gen_element("east",text=east_arm,
-                                      attributes={"speed":east_speed}))
-        arms.append(self._gen_element("west",text=west_arm,
-                                      attributes={"speed":west_speed}))
+        arms.append(self._gen_element("east",text=east_arm))
+        arms.append(self._gen_element("west",text=west_arm))
         elem.append(pointing)
         elem.append(arms)
         self.root.append(elem)

@@ -4,11 +4,12 @@ from ConfigParser import ConfigParser
 import sys
 import os
 
-config_path = os.environ["ANANSI_CONFIG"]
-config = ConfigParser()
-config.read(os.path.join(config_path,"anansi.cfg"))
-ANANSI_SERVER_IP = config.get("IPAddresses","anansi_ip")
-ANANSI_SERVER_PORT = config.getint("IPAddresses","anansi_port")
+if __name__ == "__main__":
+    from anansi import args
+    from anansi.config import config
+    args.init()
+    ANANSI_SERVER_IP = config.get("IPAddresses","tcc_ip")
+    ANANSI_SERVER_PORT = config.getint("IPAddresses","tcc_port")
 
 class TCCMessage(object):
     def __init__(self,user,comment=""):
@@ -69,8 +70,6 @@ class TCCUser(object):
             response = None
         del client
         return response
-        
-
 
 def shutdown():
     msg = TCCMessage("ebarr")
@@ -91,9 +90,4 @@ def point(x,y,system="equatorial",tracking="on",east_arm="enabled",west_arm="ena
     print client.send(str(msg))
 
 if __name__ == "__main__":
-    #import ephem as e
-    #eq = e.Equatorial(sys.argv[1],sys.argv[2])
-    #point(sys.argv[1],sys.argv[2],
-    #      system="equatorial",tracking="off",
-    #      east_arm="enabled",west_arm="enabled")
     shutdown()

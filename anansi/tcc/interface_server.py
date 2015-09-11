@@ -6,7 +6,7 @@ from anansi import exit_funcs
 from anansi.comms import TCPServer,BaseHandler
 from anansi.tcc.coordinates import make_coordinates
 from anansi.tcc.telescope_controller import TelescopeController
-from anansi.logging_db import MolongloLoggingDataBase as LogDB
+from anansi.anansi_logging import DataBaseLogger as LogDB
 
 class TCCResponse(object):
     def __init__(self):
@@ -65,16 +65,9 @@ class TCCRequest(object):
                     self.tcc_info["y"] = float(self.tcc_info["y"])
                 self.tcc_info["tracking"] = self.tcc_info["tracking"] == "on"
                 arm_status = tcc_cmd.find("arms")
-                east = arm_status.find("east")
-                west = arm_status.find("west")
-                pointing.attrib.get("system","equatorial")
-                if east.text.strip() == "disabled":
-                    self.east_arm_active = False
-                if west.text.strip() == "disabled":
-                    self.west_arm_active = False
-                self.force_east_slow = east.attrib.get("speed","auto") == "slow"
-                self.force_west_slow = west.attrib.get("speed","auto") == "slow"
-
+                self.east_state = arm_status.find("east").text
+                self.west_state = arm_status.find("west").text
+                
 
 class TCCRequestHandler(BaseHandler):
     def handle(self):
@@ -110,25 +103,15 @@ class TCCServer(TCPServer):
                     raise Exception("Unknown server command")
                 
             if request.tcc_command:
-                if request.east_arm_active:
-                    self.log.log_tcc_status("TCCServer.parse_message","info",
-                                            "Enabling east arm")
-                    self.controller.enable_east_arm()
-                else:
-                    self.log.log_tcc_status("TCCServer.parse_message","info",
-                                            "Disabling east arm")
-                    self.controller.disable_east_arm()
-                    
-                if request.west_arm_active:
-                    self.log.log_tcc_status("TCCServer.parse_message","info",
-                                            "Enabling west arm")
-                    self.controller.enable_west_arm()
-                else:
-                    self.log.log_tcc_status("TCCServer.parse_message","info",
-                                            "Disabling west arm")
-                    self.controller.disable_west_arm()
-
                 if request.tcc_command == "point":
+                    self.log.log_tcc_status("TCCServer.parse_message","info",
+                                             "Setting east arm state: %s"%(request.east_state))
+                    self.controller.set_east_state(request.east_state)
+                    
+                    self.log.log_tcc_status("TCCServer.parse_message","info",
+                                            "Setting west arm state: %s"%(request.east_state))
+                    self.controller.set_west_state(request.west_state)
+
                     info = request.tcc_info
                     self.log.log_tcc_status("TCCServer.parse_message","info",
                                             "Received pointing command: %s"%repr(info))
@@ -171,11 +154,9 @@ class TCCServer(TCPServer):
         return response
            
 if __name__ == "__main__":
-    import os
-    from ConfigParser import ConfigParser
-    config_path = os.environ["ANANSI_CONFIG"]
-    config = ConfigParser()
-    config.read(os.path.join(config_path,"anansi.cfg"))
+    from anansi import args
+    from anansi.config import config
+    args.init()
     ANANSI_SERVER_IP = config.get("IPAddresses","anansi_ip")
     ANANSI_SERVER_PORT = config.getint("IPAddresses","anansi_port")
     controller = TelescopeController()
