@@ -41,7 +41,7 @@ class DataBaseLogger(object):
     def log_eZ80_status(self,code_level,code_num):
         self.insert(models.StatusEZ80(utc=dt.utcnow(),code_level=code_level,code_num=code_num))
 
-    def log_ez80_command(self,code,data):
+    def log_eZ80_command(self,code,data):
         self.insert(models.CommandsEZ80(utc=dt.utcnow(),code=code,message=str(data)))
 
     def log_tcc_status(self,location,level,msg):
