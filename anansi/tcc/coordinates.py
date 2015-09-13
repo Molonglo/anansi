@@ -5,11 +5,6 @@ from anansi.utils import d2r,r2d
 from anansi.coords import nsew_to_hadec,hadec_to_nsew,azel_to_nsew,nsew_to_azel
 from anansi.config import config
 
-MOL_LAT = config.getfloat("MolongloEphemeris","latitude")
-MOL_LON = config.getfloat("MolongloEphemeris","longitude")
-MOL_ELV = config.getfloat("MolongloEphemeris","elevation")
-MOL_HOR = config.getfloat("MolongloEphemeris","horizon")
-
 class Molonglo(eph.Observer):
     def __init__(self,date=None,epoch=None):
         super(Molonglo,self).__init__()
@@ -17,14 +12,15 @@ class Molonglo(eph.Observer):
             self.epoch = epoch
         if date is not None:
             self.date = date
-        self.lat       = d2r(MOL_LAT)
-        self.long      = d2r(MOL_LON)
-        self.elevation = MOL_ELV
-        self.horizon   = d2r(MOL_HOR)
+        mol = config.most_ephemeris
+        self.lat       = d2r(mol.latitude)
+        self.long      = d2r(mol.longitude)
+        self.elevation = mol.elevation
+        self.horizon   = d2r(mol.horizon)
         self.compute_pressure()
 
     def sidereal_time(self):
-        return ((super(Molonglo,self).sidereal_time()*10)%(np.pi*2))
+        return super(Molonglo,self).sidereal_time()
 
 class CoordinatesMixin(object):
     def generate_other_systems(self):

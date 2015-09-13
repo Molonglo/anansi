@@ -8,25 +8,6 @@ from anansi.comms import TCPClient
 from anansi import exit_funcs
 from anansi.config import config
 
-NS_CONTROLLER_IP = config.get("IPAddresses","ns_controller_ip")
-NS_CONTROLLER_PORT = config.getint("IPAddresses","ns_controller_port")
-NS_NODE_NAME = config.get("DriveParameters","ns_node_name")
-NS_WEST_SCALING = config.getfloat("DriveParameters","ns_west_scaling")
-NS_EAST_SCALING = config.getfloat("DriveParameters","ns_east_scaling")
-NS_TILT_ZERO = config.getfloat("DriveParameters","ns_tilt_zero")
-NS_MIN_COUNTS = config.getfloat("DriveParameters","ns_minimum_counts")
-NS_SLOW_COUNTS = config.getfloat("DriveParameters","ns_slow_counts")
-MD_CONTROLLER_IP = config.get("IPAddresses","md_controller_ip")
-MD_CONTROLLER_PORT = config.getint("IPAddresses","md_controller_port")
-MD_NODE_NAME = config.get("DriveParameters","md_node_name")
-MD_WEST_SCALING = config.getfloat("DriveParameters","md_west_scaling")
-MD_EAST_SCALING = config.getfloat("DriveParameters","md_east_scaling")
-MD_TILT_ZERO = config.getfloat("DriveParameters","md_tilt_zero")
-MD_MIN_COUNTS = config.getfloat("DriveParameters","md_minimum_counts")
-MD_SLOW_COUNTS = config.getfloat("DriveParameters","md_slow_counts")
-
-# write a None --> config parser function
-
 # eZ80 flags for drive controller
 DRIVE_FAST = 0
 DRIVE_SLOW = 1
@@ -47,14 +28,6 @@ SLOW = "slow"
 DISABLED = "disabled"
 VALID_STATES = [AUTO,SLOW,DISABLED]
 
-#Drive rates
-#These should be independently calibrated for each arm
-NS_EAST_RATE = 0.001454
-NS_WEST_RATE = 0.001454
-NS_SLOW_FACTOR = 0.5
-MD_EAST_RATE = 0.000727
-MD_WEST_RATE = 0.000727
-MD_SLOW_FACTOR = 0.5
 
 class eZ80Error(Exception):
     """Generic exception returned from eZ80
@@ -479,33 +452,30 @@ class NSDriveInterface(DriveInterface):
     Args:                                                                                          
     timeout -- acceptable timeout on socket connections to the eZ80                                
     """
-    def __init__(self,
-                 node = NS_NODE_NAME,
-                 ip = NS_CONTROLLER_IP,
-                 port = NS_CONTROLLER_PORT,
-                 west_scaling = NS_WEST_SCALING,
-                 east_scaling = NS_EAST_SCALING,
-                 tilt_zero = NS_TILT_ZERO,
-                 minimum_count_limit = NS_MIN_COUNTS,
-                 slow_drive_limit = NS_SLOW_COUNTS,
-                 timeout = 5.0):
+    def __init__(self,drive_config=None):
+        if drive_config is None:
+            drive_config = config.ns_drive
+        dc = drive_config
         super(NSDriveInterface,self).__init__(
-            node,ip,port,
-            west_scaling,east_scaling,tilt_zero,
-            minimum_count_limit,slow_drive_limit,
-            timeout)
+            dc.node,dc.ip,dc.port,
+            dc.west_scaling,dc.east_scaling,dc.tilt_zero,
+            dc.minimum_counts,dc.slow_counts,
+            dc.timeout)
+        self.east_rate = dc.east_rate
+        self.west_rate = dc.west_rate
+        self.slow_factor = dc.slow_factor
 
     def get_east_rate(self):
         if self.east_state == SLOW:
-            return NS_EAST_RATE * NS_SLOW_FACTOR
+            return self.east_rate * self.slow_factor 
         else:
-            return NS_EAST_RATE
+            return self.east_rate
 
     def get_west_rate(self):
         if self.west_state == SLOW:
-            return NS_WEST_RATE * NS_SLOW_FACTOR
+            return self.west_rate * self.slow_factor
         else:
-            return NS_WEST_RATE
+            return self.west_rate
 
     def _get_direction(self,offset):
         return DRIVE_NORTH if offset >= 0 else DRIVE_SOUTH
@@ -520,34 +490,31 @@ class MDDriveInterface(DriveInterface):
     Args:                                                                                          
     timeout -- acceptable timeout on socket connections to the eZ80                                
     """
-    def __init__(self,
-                 node = MD_NODE_NAME,
-                 ip = MD_CONTROLLER_IP,
-                 port = MD_CONTROLLER_PORT,
-                 west_scaling = MD_WEST_SCALING,
-                 east_scaling = MD_EAST_SCALING,
-                 tilt_zero = MD_TILT_ZERO,
-                 minimum_count_limit = MD_MIN_COUNTS,
-                 slow_drive_limit = MD_SLOW_COUNTS,
-                 timeout = 5.0):
+    def __init__(self,drive_config=None):
+        if drive_config is None:
+            drive_config = config.ns_drive
+        dc = drive_config
         super(MDDriveInterface,self).__init__(
-            node,ip,port,
-            west_scaling,east_scaling,tilt_zero,
-            minimum_count_limit,slow_drive_limit,
-            timeout)
+            dc.node,dc.ip,dc.port,
+            dc.west_scaling,dc.east_scaling,dc.tilt_zero,
+            dc.minimum_counts,dc.slow_counts,
+            dc.timeout)
+        self.east_rate = dc.east_rate
+        self.west_rate = dc.west_rate
+        self.slow_factor = dc.slow_factor
 
     def get_east_rate(self):
         if self.east_state == SLOW:
-            return MD_EAST_RATE * MD_SLOW_FACTOR
+            return self.east_rate * self.slow_factor
         else:
-            return MD_EAST_RATE
+            return self.east_rate
 
     def get_west_rate(self):
         if self.west_state == SLOW:
-            return MD_WEST_RATE * MD_SLOW_FACTOR
+            return self.west_rate * self.slow_factor
         else:
-            return MD_WEST_RATE
-
+            return self.west_rate
+        
     def tilts_to_counts(self,east_tilt,west_tilt):
         """Convert tilts in radians to encoder counts."""
         east_counts = int(self._tilt_zero + self._east_scaling * sin(east_tilt))

@@ -11,7 +11,7 @@ from anansi.config import config
 #session singleton
 def get_session():
     if get_session.session_class is None:
-        engine = create_engine(config.get("DataBase","engine"))
+        engine = create_engine(config.database.engine)
         models.Base.metadata.create_all(engine,checkfirst=True)
         get_session.session_class = sessionmaker(bind=engine)
     return get_session.session_class()

@@ -159,11 +159,3 @@ class StatusServer(TCPServer):
         root.append(arms)
         return root
 
-if __name__ == "__main__":
-    from anansi.config import config
-    STATUS_IP = config.get("IPAddresses","status_ip")
-    STATUS_PORT = config.getint("IPAddresses","status_port")
-    server = StatusServer(STATUS_IP,STATUS_PORT)
-    server.start()
-    while True:
-        sleep(1.0)

@@ -8,44 +8,76 @@ from logging.config import fileConfig
 DEFAULT_CONFIG = "anansi.cfg"
 DEFAULT_LOGGING_CONFIG = "anansi_logging.cfg"
 DEFAULT_PATH = environ["ANANSI_CONFIG"]
-config = ConfigParser()
 
-def build_config(anansi_config=None,logging_config=None):
-    default_config = join(DEFAULT_PATH,DEFAULT_CONFIG)
+def guess_type(data):
+    types = [int,float,complex,str]
+    for typename in types:
+        try:
+            val = typename(data)
+            if typename == str:
+                if data.lower() == "true":
+                    return True
+                elif data.lower()== "false":
+                    return False
+            return val
+        except:
+            pass
 
-    if not isfile(default_config):
-        msg = ("Could not locate default configuration file.\n"
-               "The following locations where checked:\n%s"%(default_config))
-        raise IOError(msg)
-    else:
-        config.read(default_config)
+class AnansiConfig(object):
+    def update(self,config):
+        for section in config.sections():
+            if not hasattr(self,section):
+                self.__setattr__(section,ConfigSection())
+            self.__getattribute__(section).update(section,config)
     
-    if anansi_config is not None:
-        cfile = anansi_config
-        if isfile(cfile):
-            config.read(cfile)
-        elif isfile(join(DEFAULT_PATH,cfile)):
-            config.read(join(DEFAULT_PATH,cfile))
-        else:
-            msg = ("Could not locate user configuration file.\n"
-                   "The following locations were checked:\n%s"%(
-                    "\n".join([join(getcwd(),cfile),join(DEFAULT_PATH,cfile)])))
-            raise IOError(msg)
-    
-    if logging_config is not None:
-        if isfile(logging_config):
-            fileConfig(logging_config)
-        elif isfile(join(DEFAULT_PATH,logging_config)):
-            fileConfig(join(DEFAULT_PATH,logging_config))
-        else:
-            msg = ("Could not locate default configuration file.\n"
-                   "The following locations where checked:\n%s"%(
-                    "\n".join([join(getcwd(),logging_config),
-                               join(DEFAULT_PATH,logging_config)])))
-        raise IOError(msg)
-    else:
-        fileConfig(join(DEFAULT_PATH,DEFAULT_LOGGING_CONFIG))
+    def __repr__(self):
+        msg = []
+        for key,val in self.__dict__.items():
+            msg.append("[%s]"%key)
+            msg.append(repr(val)+"\n")
+        return "\n".join(msg)
 
+class ConfigSection(object):
+    def update(self,name,config):
+        for key,val in config.items(name):
+            self.__setattr__(key,guess_type(val))
+
+    def __repr__(self):
+        msg = []
+        for key,val in self.__dict__.items():
+            msg.append("%s: %s"%(key,val))
+        return "\n".join(msg)
+
+config = AnansiConfig()
+    
+def _find_file(fname):
+    if isfile(fname):
+        return fname
+    elif isfile(join(DEFAULT_PATH,fname)):
+        return join(DEFAULT_PATH,fname)
+    else:
+        msg = ("Could not locate %s."
+               "\nThe following locations were checked:\n%s"%(
+                fname,
+                "\n".join([join(getcwd(),fname),join(DEFAULT_PATH,fname)])))
+        raise IOError(msg)
+    
+
+def build_config(args=None):
+    _config = ConfigParser()
+    _config.read(_find_file(DEFAULT_CONFIG))
+    fileConfig(_find_file(DEFAULT_LOGGING_CONFIG))
+    
+    if args:
+        if args.config is not None:
+            _config.read(_find_file(args.anansi_config))
+            
+        if args.logging_config is not None:
+            fileConfig(args.logging_config)
+            
+        _config.set('misc','verbose',str(args.verbose))
+    config.update(_config)
+    
 build_config()
 
 

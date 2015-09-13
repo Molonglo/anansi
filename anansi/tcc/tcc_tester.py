@@ -1,5 +1,7 @@
 from lxml import etree
 from anansi.comms import TCPClient
+from anansi import args
+from anansi.config import build_config,config
 from ConfigParser import ConfigParser
 import sys
 import os
@@ -61,8 +63,13 @@ class TCCMessage(object):
         self.root.append(elem)
 
 class TCCUser(object):
-    def send(self,msg,ip=ANANSI_SERVER_IP,port=ANANSI_SERVER_PORT,recv=True):
-        client = TCPClient(ip,port,timeout=10.0)
+    def __init__(self,ip=None,port=None):
+        conf = config.tcc_server
+        self.ip = conf.ip if ip is None else ip
+        self.port = conf.port if port is None else port
+        
+    def send(self,msg,recv=True):
+        client = TCPClient(self.ip,self.port,timeout=10.0)
         client.send(msg)
         if recv:
             response = client.receive()

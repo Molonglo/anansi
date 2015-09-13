@@ -8,15 +8,14 @@ from anansi import exit_funcs
 
 if __name__ == "__main__":
     from anansi import args
-    from anansi.config import config
-    args.init()
-    status_ip = config.get("IPAddresses","status_ip")
-    status_port = config.getint("IPAddresses","status_port")
+    from anansi.config import config,build_config
+    build_config(args.parse_anansi_args())
+    status = config.status_server
 
     def is_on_target(xml):
         return bool(xml.find("overview").find("on_target").text)
 
-    client = TCPClient(status_ip,status_port,timeout=10.0)
+    client = TCPClient(status.ip,status.port,status.timeout)
     xml = client.receive()
 
     try:

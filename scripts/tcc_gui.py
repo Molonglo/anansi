@@ -2,7 +2,7 @@ import Tkinter as tk
 from lxml import etree
 from collections import OrderedDict
 from anansi import args
-from anansi.config import config
+from anansi.config import config,build_config
 from anansi.comms import TCPClient
 from anansi.tcc.tcc_utils import TCCMessage
 from anansi.ui_tools.dict_controller import DictController
@@ -245,13 +245,11 @@ class TCCGraphicalInterface(tk.Frame):
 
 
 if __name__ == "__main__":
-    args.init()
-    tcc_ip = config.get("IPAddresses","tcc_ip")
-    tcc_port = config.getint("IPAddresses","tcc_port")
-    status_ip = config.get("IPAddresses","status_ip")
-    status_port = config.getint("IPAddresses","status_port")
+    config.build_config(args.parse_anansi_args())
     root = tk.Tk()
-    ui = TCCGraphicalInterface(root,tcc_ip,tcc_port,status_ip,status_port)
+    tcc = config.tcc_server
+    status = config.status_server
+    ui = TCCGraphicalInterface(root,tcc.ip,tcc.port,status.ip,status.port)
     ui.pack()
     root.mainloop()
     

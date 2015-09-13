@@ -153,14 +153,3 @@ class TCCServer(TCPServer):
             response.success("TCC command passed")
         return response
            
-if __name__ == "__main__":
-    from anansi import args
-    from anansi.config import config
-    args.init()
-    ANANSI_SERVER_IP = config.get("IPAddresses","anansi_ip")
-    ANANSI_SERVER_PORT = config.getint("IPAddresses","anansi_port")
-    controller = TelescopeController()
-    server = TCCServer(ANANSI_SERVER_IP,ANANSI_SERVER_PORT,controller)
-    server.start()
-    while not server.shutdown_requested.is_set():
-        sleep(1.0)
