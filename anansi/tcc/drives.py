@@ -25,6 +25,8 @@ MD_TILT_ZERO = config.getfloat("DriveParameters","md_tilt_zero")
 MD_MIN_COUNTS = config.getfloat("DriveParameters","md_minimum_counts")
 MD_SLOW_COUNTS = config.getfloat("DriveParameters","md_slow_counts")
 
+# write a None --> config parser function
+
 # eZ80 flags for drive controller
 DRIVE_FAST = 0
 DRIVE_SLOW = 1

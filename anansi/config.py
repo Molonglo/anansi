@@ -4,6 +4,7 @@ from os.path import join,isfile
 from ConfigParser import ConfigParser
 from logging.config import fileConfig
 
+#Default parameters
 DEFAULT_CONFIG = "anansi.cfg"
 DEFAULT_LOGGING_CONFIG = "anansi_logging.cfg"
 DEFAULT_PATH = environ["ANANSI_CONFIG"]
