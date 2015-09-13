@@ -138,11 +138,8 @@ class DriveInterface(object):
 
     def _receive_message(self):
         response = self.client.receive(self.header_size)
-        print response
         header = codec.simple_decoder(response,self.header_decoder)
-        print header
         data_size = header["HOB"]*256+header["LOB"]
-        print data_size
         if data_size > 0:
             data = self.client.receive(data_size)
         else:
@@ -358,9 +355,6 @@ class DriveInterface(object):
     def set_tilts(self,east_tilt,west_tilt):
         """Set the tilts of the E and W arm NS drives."""
         east_count,west_count = self.tilts_to_counts(east_tilt,west_tilt)
-        print self.__class__.__name__ 
-        print "Etilt %f --> Ecount %d"%(east_tilt,east_count)
-        print "Wtilt %f --> Wcount %d"%(west_tilt,west_count)
         self.set_tilts_from_counts(east_count,west_count)
 
     def set_tilts_from_counts(self,east_count,west_count):
@@ -457,7 +451,7 @@ class NSDriveInterface(DriveInterface):
             drive_config = config.ns_drive
         dc = drive_config
         super(NSDriveInterface,self).__init__(
-            dc.node,dc.ip,dc.port,
+            dc.node_name,dc.ip,dc.port,
             dc.west_scaling,dc.east_scaling,dc.tilt_zero,
             dc.minimum_counts,dc.slow_counts,
             dc.timeout)
@@ -495,7 +489,7 @@ class MDDriveInterface(DriveInterface):
             drive_config = config.ns_drive
         dc = drive_config
         super(MDDriveInterface,self).__init__(
-            dc.node,dc.ip,dc.port,
+            dc.node_name,dc.ip,dc.port,
             dc.west_scaling,dc.east_scaling,dc.tilt_zero,
             dc.minimum_counts,dc.slow_counts,
             dc.timeout)

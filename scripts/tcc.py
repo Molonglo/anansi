@@ -1,6 +1,6 @@
 from time import sleep
 from anansi import args
-from anansi.config import config
+from anansi.config import config,build_config
 from anansi.tcc.interface_server import TCCServer
 from anansi.tcc.status_server import StatusServer
 from anansi.tcc.telescope_controller import TelescopeController
@@ -17,5 +17,5 @@ def main():
         sleep(1.0)
     
 if __name__ == "__main__":
-    config.build_config(args.parse_anansi_args())
+    build_config(args.parse_anansi_args())
     main()

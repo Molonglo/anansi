@@ -70,7 +70,7 @@ def build_config(args=None):
     
     if args:
         if args.config is not None:
-            _config.read(_find_file(args.anansi_config))
+            _config.read(_find_file(args.config))
             
         if args.logging_config is not None:
             fileConfig(args.logging_config)
