@@ -2,7 +2,7 @@ import Tkinter as tk
 from lxml import etree
 from collections import OrderedDict
 from anansi import args
-from anansi.config import config,build_config
+from anansi.config import config,update_config_from_args
 from anansi.comms import TCPClient
 from anansi.tcc.tcc_utils import TCCMessage
 from anansi.ui_tools.dict_controller import DictController
@@ -245,7 +245,7 @@ class TCCGraphicalInterface(tk.Frame):
 
 
 if __name__ == "__main__":
-    config.build_config(args.parse_anansi_args())
+    update_config_from_args(args.parse_anansi_args())
     root = tk.Tk()
     tcc = config.tcc_server
     status = config.status_server

@@ -1,4 +1,5 @@
 import argparse
+from config import update_config_from_args
 
 def parse_anansi_args():
     parser = argparse.ArgumentParser()
@@ -7,3 +8,7 @@ def parse_anansi_args():
     parser.add_argument("-v","--verbose",help="turn on verbose messages",default=False)
     args = parser.parse_args()
     return args
+
+if __name__ == "__main__":
+    args = parse_anansi_args()
+    print args.__dict__

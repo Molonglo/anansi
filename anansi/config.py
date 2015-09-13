@@ -63,21 +63,30 @@ def _find_file(fname):
         raise IOError(msg)
     
 
-def build_config(args=None):
+def build_config(config_file=None,logging_config=None):
     _config = ConfigParser()
     _config.read(_find_file(DEFAULT_CONFIG))
     fileConfig(_find_file(DEFAULT_LOGGING_CONFIG))
-    
-    if args:
-        if args.config is not None:
-            _config.read(_find_file(args.config))
-            
-        if args.logging_config is not None:
-            fileConfig(args.logging_config)
-            
-        _config.set('misc','verbose',str(args.verbose))
+    if config_file is not None:
+        _config.read(_find_file(config_file))
+    if logging_config is not None:
+        fileConfig(logging_config)
     config.update(_config)
     
+def update_config_from_args(args):
+    _config = ConfigParser()
+    if args.config is not None:
+        _config.read(_find_file(args.config))
+    if args.logging_config is not None:
+        fileConfig(args.logging_config)
+    if not 'cli' in _config.sections():
+        _config.add_section('cli')
+    for key,val in args.__dict__.items():
+        _config.set('cli',key,str(val))
+    config.update(_config)
+
 build_config()
 
-
+if __name__ == "__main__":
+    from anansi import args
+    update_config_from_args(args.parse_anansi_args())

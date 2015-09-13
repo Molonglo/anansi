@@ -13,6 +13,7 @@ MAX_PACKET_SIZE = 64000 #bytes
 
 class SocketError(Exception):
     def __init__(self,obj,msg):
+        new_msg = "%s at %s:%d"%(msg,obj.ip,obj.port)
         super(SocketError,self).__init__(msg)
 
 class BaseConnection(object):
