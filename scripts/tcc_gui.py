@@ -167,7 +167,7 @@ class Controls(tk.Frame):
     
     def send_recv_anansi(self,msg):
         print repr(msg)
-        client = TCPClient(self.anansi_ip,self.anansi_port,timeout=5.0)
+        client = TCPClient(self.anansi_ip,self.anansi_port,timeout=20.0)
         client.send(str(msg))
         print str(msg)
         response = client.receive()

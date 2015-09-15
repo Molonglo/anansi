@@ -110,9 +110,13 @@ class DataBaseLogger(BaseDBManager):
             self.connected = True
     
     def execute_insert(self,query):
-        #if self.connected:
-        #    super(DataBaseLogger,self).execute_insert(query)
-        #else:
+        """
+        if self.connected:
+            print query
+            super(DataBaseLogger,self).execute_insert(query)
+        else:
+            print "Not database connection"
+        """
         print query
 
     def connect(self):
@@ -138,7 +142,7 @@ class DataBaseLogger(BaseDBManager):
         query = ("INSERT INTO Status_eZ80 "
                  "(utc,code_level,code_num) "
                  "VALUES (UTC_TIMESTAMP(),'%s',%d)")%(code_level,code_num)
-        if code_level not in ['V']:
+        if not code_level == "V":
             self.execute_insert(query)
 
     def log_eZ80_command(self,code,data):

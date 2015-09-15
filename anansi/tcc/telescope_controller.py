@@ -98,9 +98,6 @@ class BaseTracker(Thread):
     def slew(self):
         self.state = "slewing"
         #print "%s slew"%(self.nsew)
-    
-    def slew(self):
-        self.state = "slewing"
         while not self.on_target() and not self._stop.is_set():
             if self.drive.active():
                 sleep(3)

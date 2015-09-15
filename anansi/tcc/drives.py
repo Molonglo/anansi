@@ -263,17 +263,13 @@ class DriveInterface(object):
             decoded_response = unpack("B",data)[0]
             self.log.log_eZ80_status(code,decoded_response)
         elif code == "U":
-            print [hex(i) for i in unpack("B"*len(data),data)]
+
             decoded_response = codec.simple_decoder(data,self._data_decoder)
             decoded_response = self._calculate_tilts(decoded_response)
             self.status_dict.update(decoded_response)
             self._log_position()
         else:
-            print "############################"
-            print "Unrecognised command option:",str(code)
-            print "############################"
-            decoded_response = 0
-            self.log.log_eZ80_status(code,decoded_response)
+            raise eZ80Error("Received unreconginsed command option from drive",self)
         if code == "E":
             raise eZ80Error(decoded_response,self)
         if (code == "C") and (decoded_response >= 15):
@@ -298,7 +294,8 @@ class DriveInterface(object):
                 while code != "S":
                     code,_ = self._parse_message(*self._receive_message())
             except Exception as error:
-                print "ERROR GETTING ACTIVE STATUS:",str(error)
+                self.log.log_tcc_status(self.__class__.__name__,
+                                        "warning","Could not get drive status: %s"%str(error))
             finally:
                 self._close_client()
         return self.status_dict
@@ -388,9 +385,9 @@ class DriveInterface(object):
         else:
             encoded_count = codec.it_pack(east_count) + codec.it_pack(west_count)
             ed,wd,es,ws = self._prepare(east_count,west_count)
-            if es is None or ws is None:
+            if es is None and ws is None:
                 # if neither arm will move more than 40 counts                                     
-                message = "E or W arm requested move of less than %d counts"%self._minimum_count_limit
+                message = "E and W arm requested move of less than %d counts"%self._minimum_count_limit
                 raise CountError(message,self)
             elif ws is None:
                 # if only east arm is to move                                                      
