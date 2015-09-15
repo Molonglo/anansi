@@ -142,8 +142,7 @@ class DataBaseLogger(BaseDBManager):
         query = ("INSERT INTO Status_eZ80 "
                  "(utc,code_level,code_num) "
                  "VALUES (UTC_TIMESTAMP(),'%s',%d)")%(code_level,code_num)
-        if not code_level == "V":
-            self.execute_insert(query)
+        self.execute_insert(query)
 
     def log_eZ80_command(self,code,data):
         query = ("INSERT INTO Commands_eZ80 "

@@ -313,6 +313,21 @@ class DriveInterface(object):
             code,_ = self._parse_message(*self._receive_message())
         self._close_client()
 
+
+    def set_verbose(self,verbose=True):
+        """Send set verbose message to eZ80.
+
+        Notes: 1 = verbose, 0 = quiet
+        """
+        byte = "1" if verbose else "0"
+        self._stop_active_drive()
+        self._open_client()
+        self._send_message("V",byte)
+        code = None
+        while code != "S":
+            code,_ = self._parse_message(*self._receive_message())
+        self._close_client()
+
     def _prepare(self,east_counts=None,west_counts=None):
         """Prepare values for drive message.                                                       
                                                                                                    
