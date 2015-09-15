@@ -11,9 +11,6 @@ if __name__ == "__main__":
     from anansi.config import config,update_config_from_args
     update_config_from_args(args.parse_anansi_args())
     status = config.status_server
-
-    def is_on_target(xml):
-        return bool(xml.find("overview").find("on_target").text)
     client = TCPClient(status.ip,status.port,status.timeout)
     xml = client.receive()
     try:

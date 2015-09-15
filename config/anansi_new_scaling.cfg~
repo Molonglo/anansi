@@ -7,20 +7,20 @@ horizon: 30.0
 [tcc_server]
 ip: 127.0.0.1
 port: 38012 
-timeout: 10.0
+timeout: 5.0
 
 [status_server]
 ip: 127.0.0.1
 port: 38013
-timeout: 10.0
+timeout: 5.0
 
 [ns_drive]
 ip: 172.17.227.122
 port: 5555
 timeout: 10.0
 node_name: NST_SWIN 
-west_scaling: 23623.049893243842
-east_scaling: 23623.049893243842
+west_scaling: 23781.186244699948
+east_scaling: 23979.429641815212
 tilt_zero: 32768.0
 minimum_counts: 40.0
 slow_counts: 400.0

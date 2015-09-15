@@ -9,6 +9,7 @@ import ctypes as C
 import logging
 from anansi import decorators
 from anansi import exit_funcs
+from struct import unpack
 MAX_PACKET_SIZE = 64000 #bytes
 
 class SocketError(Exception):
@@ -111,8 +112,8 @@ class TCPClient(BaseConnection):
         self.sock.send(msg)
 
     def receive(self,n=MAX_PACKET_SIZE):
-        msg = self.sock.recv(n)
-        return msg
+        return self.sock.recv(n)
+
 
 class ReconnectingTCPClient(object):
     def __init__(self,ip,port):

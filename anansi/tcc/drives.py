@@ -1,3 +1,4 @@
+from copy import copy
 from threading import Thread,Event
 from time import sleep
 from struct import pack,unpack
@@ -28,6 +29,14 @@ SLOW = "slow"
 DISABLED = "disabled"
 VALID_STATES = [AUTO,SLOW,DISABLED]
 
+DEFAULT_STATUS_DICT = {
+    "east_count":0,
+    "west_count":0,
+    "east_status":"",
+    "west_status":"",
+    "east_tilt":0.0,
+    "west_tilt":0.0
+    }
 
 class eZ80Error(Exception):
     """Generic exception returned from eZ80
@@ -89,8 +98,9 @@ class DriveInterface(object):
         self.west_state = AUTO
         self.east_state = AUTO
         self.active_thread = None
+        self._active = Event()
         self.event = Event()
-        self.status_dict = {}
+        self.status_dict = copy(DEFAULT_STATUS_DICT)
         self.exit_funcs = exit_funcs
         self.exit_funcs.register(self.clean_up)
         self.log = LogDB()
@@ -133,9 +143,11 @@ class DriveInterface(object):
         try:
             self.client.close()
             self.client = None
-        except:
-            pass
-
+        except Exception as e:
+            self.log.log_tcc_status(
+                "BaseDriveInterface._close_client: %s:%d"%(self._ip,self._port),
+                "error", str(e))
+        
     def _receive_message(self):
         response = self.client.receive(self.header_size)
         header = codec.simple_decoder(response,self.header_decoder)
@@ -151,7 +163,6 @@ class DriveInterface(object):
         self.client.send(header)
         if len(msg)>0:
             self.client.send(msg)
-
         if data:
             data_repr = unpack("B"*len(data),data)
             self.log.log_eZ80_command(code,str(data_repr))
@@ -174,11 +185,8 @@ class DriveInterface(object):
         self._close_client()
 
     def active(self):
-         if self.active_thread:
-             return self.active_thread.is_alive()
-         else:
-             return False
-        
+        return self._active.is_set()
+            
     def _drive_thread(self):
         """A thread to handle the eZ80 status loop while driving.                                  
                                                                                                    
@@ -193,8 +201,13 @@ class DriveInterface(object):
                     break
         except eZ80Error as e:
             raise e
+        except Exception as e:
+            self.log.log_tcc_status(
+                "BaseDriveInterface._drive_thread: %s:%d"%(self._ip,self._port),
+                "error", str(e))
         finally:
             self._close_client()
+            self._active.clear()
 
     def _drive(self,drive_code,data):
         """Send a drive command to the eZ80.                                                       
@@ -206,6 +219,7 @@ class DriveInterface(object):
         """
         self._stop_active_drive()
         self._open_client()
+        self._active.set()
         self._send_message(drive_code,data)
         while True:
             code,response = self._parse_message(*self._receive_message())
@@ -249,12 +263,16 @@ class DriveInterface(object):
             decoded_response = unpack("B",data)[0]
             self.log.log_eZ80_status(code,decoded_response)
         elif code == "U":
+            print [hex(i) for i in unpack("B"*len(data),data)]
             decoded_response = codec.simple_decoder(data,self._data_decoder)
             decoded_response = self._calculate_tilts(decoded_response)
             self.status_dict.update(decoded_response)
             self._log_position()
         else:
-            decoded_response = None
+            print "############################"
+            print "Unrecognised command option:",str(code)
+            print "############################"
+            decoded_response = 0
             self.log.log_eZ80_status(code,decoded_response)
         if code == "E":
             raise eZ80Error(decoded_response,self)
@@ -272,13 +290,17 @@ class DriveInterface(object):
         """
         if not self.active():
             self._open_client()
-            self._send_message("U",None)
-            code = None
-            while code != "U":
-                code,response = self._parse_message(*self._receive_message())
-            while code != "S":
-                code,_ = self._parse_message(*self._receive_message())
-            self._close_client()
+            try:
+                self._send_message("U",None)
+                code = None
+                while code != "U":
+                    code,response = self._parse_message(*self._receive_message())
+                while code != "S":
+                    code,_ = self._parse_message(*self._receive_message())
+            except Exception as error:
+                print "ERROR GETTING ACTIVE STATUS:",str(error)
+            finally:
+                self._close_client()
         return self.status_dict
 
     def stop(self):
@@ -286,7 +308,6 @@ class DriveInterface(object):
                                                                                                    
         Notes: This will first kill any active drive thread before sending.                        
         """
-
         self._stop_active_drive()
         self._open_client()
         self._send_message("0",None)
@@ -310,7 +331,6 @@ class DriveInterface(object):
         Returns: (east arm direction, west arm direction,                                          
                   east arm speed, west arm speed)                                                  
         """
-
         status = self.get_status()
         if east_counts is not None:
             east_offset = east_counts - status["east_count"]
@@ -337,7 +357,6 @@ class DriveInterface(object):
         else:
             west_dir = None
             west_speed = None
-    
         return east_dir,west_dir,east_speed,west_speed
 
     def tilts_to_counts(self,east_tilt,west_tilt):
@@ -349,7 +368,7 @@ class DriveInterface(object):
     def counts_to_tilts(self,east_counts,west_counts):
         """Convert encoder counts to tilts in radians."""
         east_tilt = (east_counts-self._tilt_zero)/self._east_scaling
-        west_tilt = (west_counts-self._tilt_zero)/self._east_scaling
+        west_tilt = (west_counts-self._tilt_zero)/self._west_scaling
         return east_tilt,west_tilt
 
     def set_tilts(self,east_tilt,west_tilt):
@@ -486,7 +505,7 @@ class MDDriveInterface(DriveInterface):
     """
     def __init__(self,drive_config=None):
         if drive_config is None:
-            drive_config = config.ns_drive
+            drive_config = config.md_drive
         dc = drive_config
         super(MDDriveInterface,self).__init__(
             dc.node_name,dc.ip,dc.port,
@@ -518,7 +537,7 @@ class MDDriveInterface(DriveInterface):
     def counts_to_tilts(self,east_counts,west_counts):
         """Convert encoder counts to tilts in radians."""
         east_tilt = arcsin((east_counts-self._tilt_zero)/self._east_scaling)
-        west_tilt = arcsin((west_counts-self._tilt_zero)/self._east_scaling)
+        west_tilt = arcsin((west_counts-self._tilt_zero)/self._west_scaling)
         return east_tilt,west_tilt
 
     def _get_direction(self,offset):

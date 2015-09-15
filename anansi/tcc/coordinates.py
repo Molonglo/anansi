@@ -100,10 +100,10 @@ class BodyCoordinates(eph.FixedBody,CoordinatesMixin):
         most = Molonglo(date,self._epoch)
         self.lst = most.sidereal_time()
         self.body.compute(most)
-        self._ra,self._dec = self.body.a_ra,self.body.a_dec
+        self._ra,self._dec = self.body.ra,self.body.dec
         eph.FixedBody.compute(self,most)
-        self.ha = self.lst - self.a_ra
-        self.ns,self.ew = hadec_to_nsew(self.ha,self.a_dec)
+        self.ha = self.lst - self.ra
+        self.ns,self.ew = hadec_to_nsew(self.ha,self.dec)
         self.generate_other_systems()
         self._convert()
 
@@ -176,13 +176,13 @@ def make_body(name,epoch="J2000"):
 # A version of this is retained as a standard 
 # against which to test the telescope coordinate 
 # conversion
-def get_nsew(a_dec,ha):
-    ew = np.arcsin((0.9999940546 * np.cos(a_dec) * np.sin(ha))
-                   - (0.0029798011806 * np.cos(a_dec) * np.cos(ha))
-                   + (0.002015514993 * np.sin(a_dec)))
-    ns = np.arcsin(((-0.0000237558704 * np.cos(a_dec) * np.sin(ha))
-                    + (0.578881847 * np.cos(a_dec) * np.cos(ha))
-                    + (0.8154114339 * np.sin(a_dec)))
+def get_nsew(dec,ha):
+    ew = np.arcsin((0.9999940546 * np.cos(dec) * np.sin(ha))
+                   - (0.0029798011806 * np.cos(dec) * np.cos(ha))
+                   + (0.002015514993 * np.sin(dec)))
+    ns = np.arcsin(((-0.0000237558704 * np.cos(dec) * np.sin(ha))
+                    + (0.578881847 * np.cos(dec) * np.cos(ha))
+                    + (0.8154114339 * np.sin(dec)))
                    / np.cos(ew))
     return ns,ew
 

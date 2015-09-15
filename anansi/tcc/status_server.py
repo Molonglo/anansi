@@ -8,12 +8,17 @@ from anansi import exit_funcs
 import ephem as eph
 import copy
 
-STATUS_DICT_DEFAULTS = {
-    "at_limits":False,
-    "has_coordinates":False,
+
+DRIVE_ARM_STATUS = {
+    "count":0,
+    "tilt":0.0,
+    "driving":False,
+    "state":"auto",
     "on_target":False,
-    "tracking":False,
-    "slewing":False,
+    "system_status":""
+    }
+
+STATUS_DICT_DEFAULTS = {
     "error_string":"",
     "RA":"",
     "Dec":"",
@@ -27,26 +32,14 @@ STATUS_DICT_DEFAULTS = {
     "NS":"",
     "EW":"",
     "LMST":"",
-    "west_ns_tilt":"",
-    "west_ns_count":0,
-    "west_ns_status":"",
-    "west_ns_on_target":False,
-    "west_ns_at_limit":False,
-    "west_md_tilt":"",
-    "west_md_count":0,
-    "west_md_status":"",
-    "west_md_on_target":False,
-    "west_md_at_limit":False,
-    "east_ns_tilt":"",
-    "east_ns_count":0,
-    "east_ns_status":"",
-    "east_ns_on_target":False,
-    "east_ns_at_limit":False,
-    "east_md_tilt":"",
-    "east_md_count":0,
-    "east_md_status":"",
-    "east_md_on_target":False,
-    "east_md_at_limit":False
+    "ns":{
+        "east":copy.copy(DRIVE_ARM_STATUS),
+        "west":copy.copy(DRIVE_ARM_STATUS)
+        },
+    "md":{
+        "east":copy.copy(DRIVE_ARM_STATUS),
+        "west":copy.copy(DRIVE_ARM_STATUS)
+        },
     }
 
 
@@ -72,20 +65,19 @@ class StatusServer(TCPServer):
         self.status_dict = STATUS_DICT_DEFAULTS
         self.controller = controller
 
+    def _get_drive_info(self,drive,drive_name):
+        status = drive.status_dict
+        for arm in ['east','west']:
+            self.status_dict[drive_name][arm]['count'] = status['%s_count'%arm]
+            self.status_dict[drive_name][arm]['system_status'] = status['%s_status'%arm]
+            self.status_dict[drive_name][arm]['tilt'] = status.get('%s_tilt'%arm,0.0)
+            self.status_dict[drive_name][arm]['state'] = getattr(drive,"get_%s_state"%arm)()
+            if self.controller.current_track is not None:
+                self.status_dict[drive_name][arm]['on_target'] = self.controller.current_track.on_target(drive_name,arm)
+            self.status_dict[drive_name][arm]['driving'] = drive.active_thread is not None
+
+
     def update(self):
-        status = self.controller.ns_drive.get_status()
-        for key,val in status.items():
-            new_key = "_ns_".join(key.split("_"))
-            self.status_dict[new_key] = val
-            print new_key,val
-        status = self.controller.md_drive.get_status()
-        for key,val in status.items():
-            new_key = "_md_".join(key.split("_"))
-            self.status_dict[new_key] = val
-            print new_key,val
-        print
-        print "Coordinates:",self.controller.coordinates
-        print    
         if self.controller.coordinates is not None:
             coords = copy.copy(self.controller.coordinates)
             coords.compute()
@@ -93,17 +85,19 @@ class StatusServer(TCPServer):
                 "RA":str(coords.ra),
                 "Dec":str(coords.dec),
                 "HA":str(coords.ha),
-                "Glat":str(coords.glat),
-                "Glon":str(coords.glon),
+                "Glat":str(float(coords.glat)),
+                "Glon":str(float(coords.glon)),
                 "Elat":str(coords.elat),
                 "Elon":str(coords.elon),
-                "Alt":str(coords.alt),
-                "Az":str(coords.az),
-                "NS":str(coords.ns),
-                "EW":str(coords.ew),
+                "Alt":str(float(coords.alt)),
+                "Az":str(float(coords.az)),
+                "NS":str(float(coords.ns)),
+                "EW":str(float(coords.ew)),
                 "LMST":str(coords.lst)
                 }
             self.status_dict.update(pos_dict)
+        self._get_drive_info(self.controller.ns_drive,"ns")
+        self._get_drive_info(self.controller.md_drive,"md")
 
     def _xml_from_key(self,key):
         return gen_xml_element(key,str(self.status_dict[key]))
@@ -111,10 +105,6 @@ class StatusServer(TCPServer):
     def get_xml_status(self):
         root = gen_xml_element("tcc_status")
         overview = gen_xml_element("overview")
-        overview.append(self._xml_from_key("at_limits"))
-        overview.append(self._xml_from_key("has_coordinates"))
-        overview.append(self._xml_from_key("tracking"))
-        overview.append(self._xml_from_key("slewing"))
         overview.append(self._xml_from_key("error_string"))
         root.append(overview)
 
@@ -131,32 +121,32 @@ class StatusServer(TCPServer):
         request.append(self._xml_from_key("LMST"))
         root.append(request)
 
-        def _append(root,ew,nsmd):
-            prefix = "%s_%s"%(ew,nsmd)
-            root.append(self._xml_from_key("%s_tilt"%prefix))
-            root.append(self._xml_from_key("%s_count"%prefix))
-            root.append(self._xml_from_key("%s_status"%prefix))
-            root.append(self._xml_from_key("%s_on_target"%prefix))
-            root.append(self._xml_from_key("%s_at_limit"%prefix))
-
-        arms = gen_xml_element("arms")
-        west_arm = gen_xml_element("west_arm")
-        west_arm_ns = gen_xml_element("ns_drive")
-        _append(west_arm_ns,"west","ns")
-        west_arm.append(west_arm_ns)
-        west_arm_md = gen_xml_element("md_drive")
-        _append(west_arm_md,"west","md")
-        west_arm.append(west_arm_md)
-        arms.append(west_arm)
-        east_arm = gen_xml_element("east_arm")
-        east_arm_ns = gen_xml_element("ns_drive")
-        _append(east_arm_ns,"east","ns")
-        east_arm.append(east_arm_ns)
-        east_arm_md = gen_xml_element("md_drive")
-        _append(east_arm_md,"east","md")
-        east_arm.append(east_arm_md)
-        arms.append(east_arm)
-        root.append(arms)
+        def _append(root,arm,drive):
+            root.append(gen_xml_element("tilt",str(self.status_dict[drive][arm]['tilt'])))
+            root.append(gen_xml_element("count",str(self.status_dict[drive][arm]['count'])))
+            root.append(gen_xml_element("driving",str(self.status_dict[drive][arm]['driving'])))
+            root.append(gen_xml_element("state",str(self.status_dict[drive][arm]['state'])))
+            root.append(gen_xml_element("on_target",str(self.status_dict[drive][arm]['on_target'])))
+            root.append(gen_xml_element("system_status",str(self.status_dict[drive][arm]['system_status'])))
+            
+        for drive in ["ns","md"]:
+            _drive = gen_xml_element(drive)
+            for arm in ["east","west"]:
+                _arm = gen_xml_element(arm)
+                _append(_arm,arm,drive)
+                _drive.append(_arm)
+            root.append(_drive)
         return root
 
-    
+if __name__ == "__main__":
+    from anansi.config import update_config_from_args,config
+    from anansi import args
+    from anansi.tcc.telescope_controller import TelescopeController
+    from time import sleep
+    update_config_from_args(args.parse_anansi_args())
+    s = config.status_server
+    controller = TelescopeController()
+    server = StatusServer(s.ip,s.port,controller)
+    server.start()
+    while not server.shutdown_requested.is_set():
+        sleep(1.0)

@@ -181,7 +181,7 @@ class Controls(tk.Frame):
                 
     def recv_status(self):
         client = TCPClient(self.status_ip,self.status_port,timeout=5.0)
-        response = client.receive()
+        response = client.receive(64000)
         print response
         try:
             xml = etree.fromstring(response)

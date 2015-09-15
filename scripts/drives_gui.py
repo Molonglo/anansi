@@ -1,6 +1,6 @@
 import Tkinter as tk
 from anansi import args
-from anansi.config import config
+from anansi.config import config,update_config_from_args
 from anansi.ui_tools.dict_controller import DictController
 from anansi.tcc.drives import NSDriveInterface,MDDriveInterface
 from collections import OrderedDict
@@ -128,9 +128,9 @@ class NSControls(tk.Frame):
         east_count,west_count = self.pos.get_xy()
         if east_state!="disabled" and west_state!="disabled":
             self.drive.set_tilts_from_counts(east_count,west_count)
-        elif east_state!="disabled" and west_arm=="disabled":
+        elif east_state!="disabled" and west_state=="disabled":
             self.drive.set_east_tilt_from_counts(east_count)
-        elif east_state=="disabled" and west_arm!="disabled":
+        elif east_state=="disabled" and west_state!="disabled":
             self.drive.set_west_tilt_from_counts(east_count)
         else:
             raise Exception("Both arms disabled")
@@ -191,12 +191,12 @@ class DriveGui(tk.Frame):
 
 
 if __name__ == "__main__":
-    args.init()
+    update_config_from_args(args.parse_anansi_args())
     root = tk.Tk()
     ns_drive = NSDriveInterface()
-    ui = DriveGui(root,ns_drive,NSControls,"32768")
+    ui = DriveGui(root,ns_drive,NSControls,int(config.ns_drive.tilt_zero))
     ui.pack()
     md_drive = MDDriveInterface()
-    ui = DriveGui(root,md_drive,MDControls,"8388608")
+    ui = DriveGui(root,md_drive,MDControls,int(config.md_drive.tilt_zero))
     ui.pack()
     root.mainloop()
