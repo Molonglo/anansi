@@ -10,10 +10,11 @@ from anansi.tcc import drives
 from anansi.config import config
 
 class BaseTracker(Thread):
-    def __init__(self, drive, coords, nsew, rate, tolerance):
+    def __init__(self, drive, coords, nsew, rate, tolerance, track):
         self.log = LogDB()
         self._name = "%s Tracker"%(nsew.upper())
         self.drive = drive
+        self._track = track
         self.coords = coords
         self.rate = rate
         self.nsew = nsew
@@ -65,7 +66,7 @@ class BaseTracker(Thread):
     def drive_time(self):
         self.coords.compute()
         tilt = self._max_tilt_offset(self.coords.ns)
-        return fmin(self.__mdt,[0.0,],args=(tilt,))[0]
+        return fmin(self.__mdt,[0.0,],args=(tilt,),disp=False)[0]
         
     def __mpd(self,t):
         t = abs(t)
@@ -97,7 +98,9 @@ class BaseTracker(Thread):
     
     def slew(self):
         self.state = "slewing"
-        #print "%s slew"%(self.nsew)
+        print
+        print "%s slew"%(self.nsew)
+        print
         while not self.on_target() and not self._stop.is_set():
             if self.drive.active():
                 sleep(3)
@@ -114,14 +117,15 @@ class BaseTracker(Thread):
                 sleep(3)
                 continue
             else:
-                pt = fmin(self.__mpd,[0.0,])[0]
+                pt = fmin(self.__mpd,[0.0,],disp=False)[0]
                 date = eph.now() + pt*eph.second
                 self.coords.compute(date)
                 self.set_tilts(getattr(self.coords,self.nsew))
                 
     def run(self):
         self.slew()
-        self.track()
+        if self._track:
+            self.track()
             
     def end(self):
         self._stop.set()
@@ -130,21 +134,21 @@ class BaseTracker(Thread):
         
 
 class NSTracker(BaseTracker):
-    def __init__(self, drive, coords):
+    def __init__(self, drive, coords,track):
         rate = config.ns_drive.east_rate
         tolerance = config.ns_drive.tolerance
-        BaseTracker.__init__(self, drive, coords, "ns", rate, tolerance)
+        BaseTracker.__init__(self, drive, coords, "ns", rate, tolerance, track)
 
 class MDTracker(BaseTracker):
-    def __init__(self, drive, coords):
+    def __init__(self, drive, coords,track):
         rate = config.md_drive.east_rate
         tolerance = config.md_drive.tolerance
-        BaseTracker.__init__(self, drive, coords, "ew", rate, tolerance)
+        BaseTracker.__init__(self, drive, coords, "ew", rate, tolerance, track)
 
 class Tracker(object):
-    def __init__(self,ns_drive,md_drive,coords):
-        self.md_tracker = MDTracker(md_drive,copy.copy(coords))
-        self.ns_tracker = NSTracker(ns_drive,copy.copy(coords))
+    def __init__(self,ns_drive,md_drive,coords,track=True):
+        self.md_tracker = MDTracker(md_drive,copy.copy(coords),track)
+        self.ns_tracker = NSTracker(ns_drive,copy.copy(coords),track)
         self.md_tracker.start()
         self.ns_tracker.start()
         
@@ -189,10 +193,10 @@ class TelescopeController(object):
         self.ns_drive.stop()
         self.md_drive.stop()
         
-    def track(self,coordinates):
+    def observe(self,coordinates,track=True):
         self.coordinates = coordinates
         self.end_current_track()
-        self.current_track = Tracker(self.ns_drive,self.md_drive,coordinates)
+        self.current_track = Tracker(self.ns_drive,self.md_drive,coordinates,track=track)
         
     def end_current_track(self):
         if self.current_track:
@@ -209,21 +213,6 @@ class TelescopeController(object):
             finally:
                 self.current_track = None
     
-    def _drive_to(self,ns,ew):
-        self.log.log_tcc_status("TelescopeController._drive_to",
-                                "info", "Sending telescope to NS: %.5f rads EW: %.5f rads"%(ns,ew))
-        self.ns_drive.set_tilts(ns,ns)
-        self.md_drive.set_tilts(ew,ew)
-
-    def drive_to(self,coordinates):
-        self.coordinates = coordinates
-        self.end_current_track()
-        coordinates.compute()
-        self.log.log_tcc_status(
-            "TelescopeController.drive_to",
-            "info", "Sending telescope to coordinates: %s"%repr(coordinates))
-        self._drive_to(coordinates.ns,coordinates.ew)
-
     def wind_stow(self):
         self.end_current_track()
         self.log.log_tcc_status(

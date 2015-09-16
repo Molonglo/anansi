@@ -2,11 +2,13 @@ from threading import Thread,Event,Timer
 from Queue import Queue
 from time import sleep
 from lxml import etree
+import logging
 from anansi import exit_funcs
+from anansi import log
 from anansi.comms import TCPServer,BaseHandler
 from anansi.tcc.coordinates import make_coordinates
 from anansi.tcc.telescope_controller import TelescopeController
-from anansi.anansi_logging import DataBaseLogger as LogDB
+logger = logging.getLogger('anansi')
 
 class TCCResponse(object):
     def __init__(self):
@@ -83,9 +85,9 @@ class TCCServer(TCPServer):
         TCPServer.__init__(self,ip,port,handler_class=TCCRequestHandler)
         self.controller = controller
         self.shutdown_requested = Event()
-        self.log = LogDB()
 
     def parse_message(self,msg):
+        logger.info("Parsing received TCC command: %s"%msg)
         self.log.log_tcc_status("TCCServer.parse_message","info",msg)
         response = TCCResponse()
         try:
@@ -99,6 +101,8 @@ class TCCServer(TCPServer):
                     self.log.log_tcc_status("TCCServer.parse_message","info",
                                             "Received shutdown message")
                     self.shutdown_requested.set()
+                elif request.server_command == "ping":
+                    pass
                 else:
                     raise Exception("Unknown server command")
                 
@@ -120,12 +124,12 @@ class TCCServer(TCPServer):
                     if info["tracking"]:
                         self.log.log_tcc_status("TCCServer.parse_message","info",
                                                 "Requesting source track")
-                        self.controller.track(coords)
+                        self.controller.observe(coords,track=True)
                     else:
                         self.log.log_tcc_status("TCCServer.parse_message","info",
                                                 "Requesting drive to source")
-                        self.controller.drive_to(coords)
-        
+                        self.controller.observe(coords,track=False)
+                        
                 elif request.tcc_command == "wind_stow":
                     print
                     print "WIND STOW"

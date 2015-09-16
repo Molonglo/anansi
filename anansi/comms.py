@@ -6,16 +6,19 @@ from multiprocessing import RawArray,RawValue
 from threading import Thread,Event
 from Queue import Queue
 import ctypes as C
+from struct import unpack
 import logging
 from anansi import decorators
 from anansi import exit_funcs
-from struct import unpack
+from anansi import log
 MAX_PACKET_SIZE = 64000 #bytes
+logger = logging.getLogger('anansi')
 
 class SocketError(Exception):
     def __init__(self,obj,msg):
         new_msg = "%s at %s:%d"%(msg,obj.ip,obj.port)
-        super(SocketError,self).__init__(msg)
+        super(SocketError,self).__init__(news_msg)
+        
 
 class BaseConnection(object):
     def __init__(self,ip,port,sock_family,sock_type):

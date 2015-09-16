@@ -2,11 +2,10 @@ import socket
 from os import environ,getcwd
 from os.path import join,isfile
 from ConfigParser import ConfigParser
-from logging.config import fileConfig
+from anansi.log import init_logging
 
 #Default parameters
 DEFAULT_CONFIG = "anansi.cfg"
-DEFAULT_LOGGING_CONFIG = "anansi_logging.cfg"
 DEFAULT_PATH = environ["ANANSI_CONFIG"]
 
 def guess_type(data):
@@ -63,27 +62,25 @@ def _find_file(fname):
         raise IOError(msg)
     
 
-def build_config(config_file=None,logging_config=None):
+def build_config(config_file=None):
     _config = ConfigParser()
     _config.read(_find_file(DEFAULT_CONFIG))
     fileConfig(_find_file(DEFAULT_LOGGING_CONFIG))
     if config_file is not None:
         _config.read(_find_file(config_file))
-    if logging_config is not None:
-        fileConfig(logging_config)
     config.update(_config)
+    init_logging()
     
 def update_config_from_args(args):
     _config = ConfigParser()
     if args.config is not None:
         _config.read(_find_file(args.config))
-    if args.logging_config is not None:
-        fileConfig(args.logging_config)
     if not 'cli' in _config.sections():
         _config.add_section('cli')
     for key,val in args.__dict__.items():
         _config.set('cli',key,str(val))
     config.update(_config)
+    init_logging()
 
 build_config()
 

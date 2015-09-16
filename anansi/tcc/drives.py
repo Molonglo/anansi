@@ -4,10 +4,12 @@ from time import sleep
 from struct import pack,unpack
 from anansi import codec
 from numpy import sin,arcsin
-from anansi.anansi_logging import DataBaseLogger as LogDB
 from anansi.comms import TCPClient
 from anansi import exit_funcs
 from anansi.config import config
+from anansi import log
+import logging
+logger = logging.getLogger('anansi')
 
 # eZ80 flags for drive controller
 DRIVE_FAST = 0
@@ -16,6 +18,8 @@ DRIVE_EAST = 0
 DRIVE_WEST = 1 
 DRIVE_NORTH = 0
 DRIVE_SOUTH = 1
+
+EZ80_SOCKET_COUNT_LIMIT = 18
 
 # eZ80 arm codes
 BOTH_ARMS = "1"
@@ -32,11 +36,13 @@ VALID_STATES = [AUTO,SLOW,DISABLED]
 DEFAULT_STATUS_DICT = {
     "east_count":0,
     "west_count":0,
-    "east_status":"",
-    "west_status":"",
+    "east_status":0,
+    "west_status":0,
     "east_tilt":0.0,
     "west_tilt":0.0
     }
+
+
 
 class eZ80Error(Exception):
     """Generic exception returned from eZ80
@@ -48,10 +54,15 @@ class eZ80Error(Exception):
     code -- Error code from eZ80
     """
     def __init__(self,code,drive_obj):
-        message = "Exception E:%d caught from drive"%(code)
+        message = "Exception E:%d caught from %s drive"%(code,drive_obj.name)
         super(eZ80Error,self).__init__(message)
-        LogDB().log_tcc_status(drive_obj.__class__.__name__,
-                               "error",message)
+        logger.error(message,extra=tcc_status())
+
+class eZ80SocketCountError(Exception):
+    def __init__(self,count,drive_obj):
+        message = "%s drive socket count (%d) exceeds maximum (%d)"%(drive_obj.name,count,EZ80_SOCKET_COUNT_LIMIT)
+        super(eZ80SocketCountError,self).__init__(message)
+        logger.error(message,extra=tcc_status())
 
 
 class CountError(Exception):
@@ -66,8 +77,7 @@ class CountError(Exception):
     """
     def __init__(self,message,drive_obj):
         super(CountError,self).__init__(message)
-        LogDB().log_tcc_status(drive_obj.__class__.__name__,
-                               "warning",message)
+        logger.warning(message,extra=tcc_status())
 
 
 class DriveInterface(object):
@@ -103,7 +113,6 @@ class DriveInterface(object):
         self.status_dict = copy(DEFAULT_STATUS_DICT)
         self.exit_funcs = exit_funcs
         self.exit_funcs.register(self.clean_up)
-        self.log = LogDB()
 
     def clean_up(self):
         self._stop_active_drive()
@@ -134,19 +143,17 @@ class DriveInterface(object):
         try:
             self.client = TCPClient(self._ip,self._port,timeout=self.timeout)
         except Exception as e:
-            self.log.log_tcc_status(
-                "BaseDriveInterface._open_client: %s:%d"%(self._ip,self._port),
-                "error", str(e))
+            logger.error("Could not open client to %s drive"%(self.name),extra=log.tcc_status(),exc_info=True)
             raise e
 
     def _close_client(self):
         try:
-            self.client.close()
-            self.client = None
+            if self.client is not None:
+                self.client.close()
         except Exception as e:
-            self.log.log_tcc_status(
-                "BaseDriveInterface._close_client: %s:%d"%(self._ip,self._port),
-                "error", str(e))
+            logger.error("Could not client for %s drive"%(self.name),extra=log.tcc_status(),exc_info=True)
+        finally:
+            self.client = None
         
     def _receive_message(self):
         response = self.client.receive(self.header_size)
@@ -165,9 +172,10 @@ class DriveInterface(object):
             self.client.send(msg)
         if data:
             data_repr = unpack("B"*len(data),data)
-            self.log.log_eZ80_command(code,str(data_repr))
+            msg = "Sent %s drive %s command with data: %s"%(self.name,code,data_repr)
         else:
-            self.log.log_eZ80_command(code,"None")
+            msg = "Sent %s drive %s command with no data"%(self.name,code)
+        logger.info(msg,extra=log.eZ80_command(code,data,self.name))
 
     def _stop_active_drive(self):
         """Stop active drive thread without requesting telescope stop.                             
@@ -194,6 +202,7 @@ class DriveInterface(object):
         the event object of this class, the drive thread will be                                   
         stopped.                                                                                   
         """
+        logger.info("Spawned %s drive thread"%self.name,extra=tcc_status())
         try:
             while not self.event.is_set():
                 code,response = self._parse_message(*self._receive_message())
@@ -202,9 +211,7 @@ class DriveInterface(object):
         except eZ80Error as e:
             raise e
         except Exception as e:
-            self.log.log_tcc_status(
-                "BaseDriveInterface._drive_thread: %s:%d"%(self._ip,self._port),
-                "error", str(e))
+            logger.error("Caught exception in %s drive thread loop"%self.name,extra=tcc_status(),exc_info=True)
         finally:
             self._close_client()
             self._active.clear()
@@ -222,19 +229,17 @@ class DriveInterface(object):
         self._active.set()
         self._send_message(drive_code,data)
         while True:
-            code,response = self._parse_message(*self._receive_message())
+            try:
+                code,response = self._parse_message(*self._receive_message())
+            except:
+                logger.error("Caught exception in %s drive preparation"%self.name,extra=tcc_status(),exc_info=True)
+                self._close_client()
             if (code == "S") and (response == 0):
                 self.active_thread = Thread(target=self._drive_thread)
                 self.active_thread.daemon = True
                 self.active_thread.start()
                 break
 
-    def _log_position(self):
-        """Log the position of the drives in the logging database.                              
-        """
-        self.log.log_position(self.__class__.__name__,
-            self.status_dict["west_count"],
-            self.status_dict["east_count"])
 
     def _parse_message(self,header,data):
         """Parse a message returned from the eZ80.                                                 
@@ -261,19 +266,25 @@ class DriveInterface(object):
         code = header["Command option"]
         if code in ["E","I","W","V","S","C"]:
             decoded_response = unpack("B",data)[0]
-            self.log.log_eZ80_status(code,decoded_response)
+            logger.info("Received code %s:%d from %s drive"%(code,decoded_response,self.name),
+                        extra=log.eZ80_status(self.name,code,decoded_response))
         elif code == "U":
-
             decoded_response = codec.simple_decoder(data,self._data_decoder)
             decoded_response = self._calculate_tilts(decoded_response)
             self.status_dict.update(decoded_response)
-            self._log_position()
+            msg = ("Received {name} drive position update    east: {east_tilt:.4} "
+                   "({east_count})   west: {west_tilt:.4} ({west_count})"
+                   ).format(name=self.name,**self.status_dict))
+            logger.info(msg,extra=log.eZ80_position(self.name,self.status_dict))
         else:
-            raise eZ80Error("Received unreconginsed command option from drive",self)
+            raise Exception("Unrecognized command option '%s' received from %s drive"%(code,self.name)) 
         if code == "E":
             raise eZ80Error(decoded_response,self)
+        if (code == "C") and (decoded_response > EZ80_SOCKET_COUNT_LIMIT):
+            raise eZ80SocketCountError(decoded_response,self)
         if (code == "C") and (decoded_response >= 15):
-            sleep(0.3)
+            logger.warning("Approaching socket count limit on %s drive: having a wee rest"%(self.name),extra=log.tcc_status())
+            sleep(0.3)            
         return code,decoded_response
 
     def get_status(self):
@@ -294,8 +305,8 @@ class DriveInterface(object):
                 while code != "S":
                     code,_ = self._parse_message(*self._receive_message())
             except Exception as error:
-                self.log.log_tcc_status(self.__class__.__name__,
-                                        "warning","Could not get drive status: %s"%str(error))
+                logger.error("Could not retreive drive status",extra=log.tcc_status(),exc_info=True)
+                raise error
             finally:
                 self._close_client()
         return self.status_dict
@@ -319,10 +330,9 @@ class DriveInterface(object):
 
         Notes: 1 = verbose, 0 = quiet
         """
-        byte = "1" if verbose else "0"
         self._stop_active_drive()
         self._open_client()
-        self._send_message("V",byte)
+        self._send_message("V",pack("B",1 if verbose else 0))
         code = None
         while code != "S":
             code,_ = self._parse_message(*self._receive_message())
@@ -425,7 +435,6 @@ class DriveInterface(object):
     def set_east_tilt_from_counts(self,east_count):
         """Set tilt of east arm base on encoder counts."""
         if self.east_state == DISABLED:
-            # log an error here
             return
         else:
             encoded_count = codec.it_pack(east_count)

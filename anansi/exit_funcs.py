@@ -1,20 +1,21 @@
 import signal
 import sys
 import weakref
-from anansi.anansi_logging import DataBaseLogger as LogDB
+import logging
+from anansi import log
 
 def callback(signum,frame):
-    log = LogDB()
-    log.log_tcc_status("exit_funcs.callback","debug",
-                       "Caught signal %d, running callbacks"%signum)
+    logger = logging.getLogger('anansi')
+    msg = "Caught signal %d, running all callbacks"%signum
+    logger.debug(msg,extra=log.tcc_status("exit_funcs.callback","debug",msg))
+    
     while _CALLBACKS:
         try:
             func,args,kwargs = _CALLBACKS.pop()
             func(*args,**kwargs)
         except Exception as error:
-            log.log_tcc_status("exit_funcs.callback","error",
-                               str(error))
-            pass
+            logger.error("Error while running callbacks",
+                         extra=log.tcc_status("exit_funcs.callback","error",str(error)),exc_info=True)
     sys.exit(0)
 
 def register(func,*args,**kwargs):
