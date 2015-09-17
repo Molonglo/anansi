@@ -1,7 +1,10 @@
-import MySQLdb
-import os
-import warnings
-from anansi.config import config
+import logging
+logger = logging.getLogger('anansi')
+
+try:
+    import MySQLdb
+except ImportError:
+    logger.warning("Could not import MySQLdb: database functionality will be disabled")
 
 class BaseDBManager(object):
     def __init__(self):
@@ -21,7 +24,7 @@ class BaseDBManager(object):
                     self.cursor = self.connection.cursor()
                 except Exception as error:
                     self.cursor = None
-                    warnings.warn(str(error),Warning)
+                    logger.warn(str(error))
             else:
                 self.connection.ping(True)
             func(self,*args,**kwargs)
@@ -89,7 +92,7 @@ class BaseDBManager(object):
         try:
             output  = self.cursor.fetchall()
         except Exception as error:
-            warnings.warn(str(error),Warning)
+            logger.warn(str(error))
             return None
         if not output or len(output) == 0:
             return None
@@ -105,7 +108,7 @@ class AnansiDataBase(BaseDBManager):
             self.connect()
         except Exception as error:
             self.connected = False
-            warnings.warn(str(error))
+            logger.warn(str(error))
         else:
             self.connected = True
     

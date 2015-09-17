@@ -4,9 +4,6 @@ import atexit
 from Queue import Queue
 from threading import Thread,Event
 from logutils.queue import QueueHandler, QueueListener
-#from anansi.database import AnansiDataBase
-from database import AnansiDataBase
-from anansi.config import config
 
 BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE = range(8)
 RESET_SEQ = "\033[0m"
@@ -167,9 +164,9 @@ def _init_database_logging(database,level=logging.NOTSET):
 def init_logging(stream_level=None, database_level=None):
     [queue_listner.removeHandler(handler) for handler in queue_listner.handlers]
     if database_level is None:
-        database_level = getattr(logging,config.logging.database_level)
+        database_level = config.logging.database_level
     if stream_level is None:
-        stream_level = getattr(logging,config.logging.stream_level)
+        stream_level = config.logging.stream_level
     logger = logging.getLogger('anansi')
     _init_stream_logging(stream_level)
     try:
@@ -188,5 +185,5 @@ def test():
     logger.error("Hi database!",extra=tcc_status())
     logger.info("Hi database!",extra=tcc_status())
 
-test()    
-
+from anansi.database import AnansiDataBase
+from anansi.config import config

@@ -7,7 +7,7 @@ from anansi import log
 def callback(signum,frame):
     logger = logging.getLogger('anansi')
     msg = "Caught signal %d, running all callbacks"%signum
-    logger.debug(msg,extra=log.tcc_status("exit_funcs.callback","debug",msg))
+    logger.debug(msg,extra=log.tcc_status())
     
     while _CALLBACKS:
         try:
@@ -15,7 +15,7 @@ def callback(signum,frame):
             func(*args,**kwargs)
         except Exception as error:
             logger.error("Error while running callbacks",
-                         extra=log.tcc_status("exit_funcs.callback","error",str(error)),exc_info=True)
+                         extra=log.tcc_status(),exc_info=True)
     sys.exit(0)
 
 def register(func,*args,**kwargs):

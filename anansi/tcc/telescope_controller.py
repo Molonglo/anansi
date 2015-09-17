@@ -1,18 +1,25 @@
 from threading import Thread,Event
 from time import sleep,time
 import copy
+import logging
 from scipy.optimize import fmin
 import ephem as eph
 from anansi.utils import gen_xml_element,d2r,r2d
-from anansi.anansi_logging import DataBaseLogger as LogDB
 from anansi.tcc.drives import NSDriveInterface,MDDriveInterface,CountError
 from anansi.tcc import drives
 from anansi.config import config
+from anansi import log
+logger = logging.getLogger('anansi')
+
+class TelescopeArmsDisabled(Exception):
+    def __init__(self,name):
+        message = "Both telescope arms disabled for %s drive"%(name)
+        logger.error(message,extra=log.tcc_status())
+        super(TelescopeArmsDisabled,self).__init__(message)
 
 class BaseTracker(Thread):
     def __init__(self, drive, coords, nsew, rate, tolerance, track):
-        self.log = LogDB()
-        self._name = "%s Tracker"%(nsew.upper())
+        self._name = "%s Tracker"%(drive.name.upper())
         self.drive = drive
         self._track = track
         self.coords = coords
@@ -20,7 +27,6 @@ class BaseTracker(Thread):
         self.nsew = nsew
         self._stop = Event()
         self.tolerance = tolerance
-        self.state = None
         self.on_source = False
         Thread.__init__(self)
 
@@ -38,7 +44,7 @@ class BaseTracker(Thread):
         elif self.drive.get_west_state() != drives.DISABLED:
             return state["west_tilt"]
         else:
-            raise Exception("Both arms disabled")
+            raise TelescopeArmsDisabled(self.drive.name)
         
     def on_target(self,arm=None):
         self.coords.compute()
@@ -50,8 +56,8 @@ class BaseTracker(Thread):
         else:
             raise Exception("Valid arm names are east and west")
         offset = abs(tilt-x)
-        #print "%s drive furthest tilt: %f,   desired: %f,   offset: %f"%(self.nsew,tilt,x,offset)
         self.on_source = offset<=self.tolerance
+        logger.info("%s drive is %.5f radians from target"%offset,extra=log.tcc_status())
         return self.on_source
 
     def __mdt(self,t,*args):
@@ -66,7 +72,9 @@ class BaseTracker(Thread):
     def drive_time(self):
         self.coords.compute()
         tilt = self._max_tilt_offset(self.coords.ns)
-        return fmin(self.__mdt,[0.0,],args=(tilt,),disp=False)[0]
+        dt = fmin(self.__mdt,[0.0,],args=(tilt,),disp=False)[0]
+        logger.info("Predicted slew time for %s drive: %.0f"%(self.drive.name,dt),
+                    extra=log.tcc_status())
         
     def __mpd(self,t):
         t = abs(t)
@@ -79,8 +87,7 @@ class BaseTracker(Thread):
 
     def set_tilts(self,tilt):
         try:
-            self.log.log_tcc_status(self._name, "info",
-                                    "Setting %s tilt to %.5f"%(self.nsew,tilt))
+            self.info("Setting %s drive tilt to %.5f"%(self.drive.name,tilt),extra=log.tcc_status())
             if self.drive.get_east_state() != drives.DISABLED and self.drive.get_west_state()!=drives.DISABLED:
                 self.drive.set_tilts(tilt,tilt)
             elif self.drive.get_east_state() != drives.DISABLED:
@@ -88,19 +95,15 @@ class BaseTracker(Thread):
             elif self.drive.get_west_state() != drives.DISABLED:
                 self.drive.set_west_tilt(tilt)
             else:
-                raise Exception("Both arms disabled")
+                raise TelescopeArmsDisabled(self.drive.name)
         except CountError:
             sleep(2)
         except Exception as error:
-            msg = "Set tilt failed on %s drive tracker for tilt %f"%(self.nsew,tilt)
-            self.log.log_tcc_status(self._name, "error",msg)
+            msg = "Set tilt failed on %s drive tracker for tilt %f"%(self.drive.name,tilt)
+            logger.error(msg,extra=log.tcc_status(),exc_info=True)
             sleep(2)
     
     def slew(self):
-        self.state = "slewing"
-        print
-        print "%s slew"%(self.nsew)
-        print
         while not self.on_target() and not self._stop.is_set():
             if self.drive.active():
                 sleep(3)
@@ -111,12 +114,13 @@ class BaseTracker(Thread):
             self.set_tilts(getattr(self.coords,self.nsew))
                         
     def track(self):
-        self.state = "tracking"
         while not self._stop.is_set():
             if self.drive.active() or self.on_target():
                 sleep(3)
                 continue
             else:
+                logger.info("Updating tracking position for %s drive"%self.drive.name,
+                            extra=log.tcc_status())
                 pt = fmin(self.__mpd,[0.0,],disp=False)[0]
                 date = eph.now() + pt*eph.second
                 self.coords.compute(date)
@@ -147,28 +151,28 @@ class MDTracker(BaseTracker):
 
 class Tracker(object):
     def __init__(self,ns_drive,md_drive,coords,track=True):
-        self.md_tracker = MDTracker(md_drive,copy.copy(coords),track)
-        self.ns_tracker = NSTracker(ns_drive,copy.copy(coords),track)
+        
+        self.md_tracker = MDTracker(md_drive,coords.new_instance(),track)
+        self.ns_tracker = NSTracker(ns_drive,coords.new_instance(),track)
         self.md_tracker.start()
         self.ns_tracker.start()
         
     def end(self):
         self.md_tracker.end()
         self.ns_tracker.end()
+        self.md_tracker.join()
+        self.ns_tracker.join()
         
     def on_target(self,drive_name,arm):
-        if drive_name == "ns":
+        if drive_name == drives.NS_NAME:
             return self.ns_tracker.on_source
-        elif drive_name == "md":
+        elif drive_name == drives.MD_NAME:
             return self.md_tracker.on_source
         else:
             raise Exception("Valid drive names are ns and md")
 
 class TelescopeController(object):
     def __init__(self):
-        self.log = LogDB()
-        self.log.log_tcc_status("TelescopeController", "info",
-                                "Spawning telescope controller thread")
         self.current_track = None
         self.ns_drive = NSDriveInterface()
         self.md_drive = MDDriveInterface()
@@ -187,8 +191,7 @@ class TelescopeController(object):
         self.md_drive.set_west_state(state)
         
     def stop(self):
-        self.log.log_tcc_status("TelescopeController.stop", "info",
-                                "Stop requested for both NS & MD drives")
+        logger.info("Ending tracks and stopping telescope",extra=log.tcc_status())
         self.end_current_track()
         self.ns_drive.stop()
         self.md_drive.stop()
@@ -200,34 +203,27 @@ class TelescopeController(object):
         
     def end_current_track(self):
         if self.current_track:
-            self.log.log_tcc_status(
-                    "TelescopeController.end_current_track",
-                    "info", "Stopping current track")
+            logger.info("Ending current track",extra=log.tcc_status())
             try:
                 self.current_track.end()
-                self.current_track.join()
             except Exception as error:
-                self.log.log_tcc_status(
-                    "TelescopeController.end_current_track", 
-                    "warning", str(error))
+                logger.error("Exception caught while attempting to end the current track",
+                             extra=log.tcc_status(),exc_info=True)
             finally:
                 self.current_track = None
     
     def wind_stow(self):
         self.end_current_track()
-        self.log.log_tcc_status(
-            "TelescopeController.wind_stow",
-            "info", "Sending telescope to wind stow")
+        logger.info("Sending telescope to wind stow",extra=log.tcc_status())
         ns = d2r(config.presets.wind_stow_nw)
         ew = d2r(config.presets.wind_stow_ew)
+        
         self._drive_to(ns,ew)
         
     def maintenance_stow(self):
         self.end_current_track()
-        self.log.log_tcc_status(
-            "TelescopeController.maintenance_stow",
-            "info", "Sending telescope to maintenance stow")
-        ns = d2r(config.presets.maintenance_stow_nw)
+        logger.info("Sending telescope to maintenance stow",extra=log.tcc_status())
+        ns = d2r(config.presets.maintenance_stow_ns)
         ew = d2r(config.presets.maintenance_stow_ew)
         self._drive_to(ns,ew)
 

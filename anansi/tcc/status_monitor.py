@@ -1,9 +1,6 @@
 import os
 from lxml import etree
 from anansi.comms import TCPClient
-from time import sleep
-from ConfigParser import ConfigParser
-from anansi.anansi_logging import DataBaseLogger as LogDB
 from anansi import exit_funcs
 
 if __name__ == "__main__":

@@ -1,13 +1,14 @@
 from threading import Event
-from anansi.comms import TCPServer,BaseHandler
 from time import sleep
-from lxml import etree
-from anansi.utils import gen_xml_element
-from anansi.anansi_logging import DataBaseLogger as LogDB
-from anansi import exit_funcs
-import ephem as eph
 import copy
-
+import logging
+from lxml import etree
+import ephem as eph
+from anansi.comms import TCPServer,BaseHandler
+from anansi.utils import gen_xml_element
+from anansi import exit_funcs
+from anansi import log
+logger = logging.getLogger('anansi')
 
 DRIVE_ARM_STATUS = {
     "count":0,
@@ -48,15 +49,18 @@ class StatusRequestHandler(BaseHandler):
         try:
             self.server.update()
         except Exception as error:
-            self.request.send(str(error))
-        else:
+            logger.error("Could not update status server",extra=log.tcc_status(),exc_info=True)
+            self.request.send("Error on status request: %s"%str(error))
+            return 
+    
+        try:
             xml = self.server.get_xml_status()
-            try:
-                response = etree.tostring(xml,encoding='ISO-8859-1')
-            except Exception as error:
-                self.request.send(str(error))
-            else:
-                self.request.send(response)
+            response = etree.tostring(xml,encoding='ISO-8859-1')
+        except Exception as error:
+            logger.error("Could not create XML status message",extra=log.tcc_status(),exc_info=True)
+            self.request.send("Error on status request: %s"%str(error))
+        else:
+            self.request.send(response)
 
 
 class StatusServer(TCPServer):

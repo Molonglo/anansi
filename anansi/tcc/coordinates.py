@@ -71,6 +71,9 @@ class RADecCoordinates(eph.FixedBody,CoordinatesMixin):
         self.generate_other_systems()
         self._convert()
 
+    def new_instance(self):
+        return make_coordinates(self._ra,self._dec,system="equatorial",units="radians",epoch="J2000")
+
 class NSEWCoordinates(eph.FixedBody,CoordinatesMixin):
     def __init__(self,ns,ew):
         self.ns = ns
@@ -88,8 +91,12 @@ class NSEWCoordinates(eph.FixedBody,CoordinatesMixin):
         self.generate_other_systems()
         self._convert()
 
+    def new_instance(self):
+        return make_coordinates(self.ns,self.ew,system="nsew",units="radians",epoch="J2000")
+
 class BodyCoordinates(eph.FixedBody,CoordinatesMixin):
     def __init__(self,body,epoch=eph.J2000):
+        self.body_type = body
         self.body = body()
         self.body._epoch = epoch
         self._epoch = epoch
@@ -107,6 +114,10 @@ class BodyCoordinates(eph.FixedBody,CoordinatesMixin):
         self.generate_other_systems()
         self._convert()
 
+    def new_instance(self):
+        return BodyCoordinates(self.body_type,epoch=self._epoch)
+
+        
 def make_coordinates(x,y,system="equatorial",units="hhmmss",epoch="J2000"):
     system = system.lower()
     units = units.lower()

@@ -17,7 +17,7 @@ logger = logging.getLogger('anansi')
 class SocketError(Exception):
     def __init__(self,obj,msg):
         new_msg = "%s at %s:%d"%(msg,obj.ip,obj.port)
-        super(SocketError,self).__init__(news_msg)
+        super(SocketError,self).__init__(new_msg)
         
 
 class BaseConnection(object):

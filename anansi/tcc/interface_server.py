@@ -5,10 +5,17 @@ from lxml import etree
 import logging
 from anansi import exit_funcs
 from anansi import log
+from anansi.tcc import drives
 from anansi.comms import TCPServer,BaseHandler
 from anansi.tcc.coordinates import make_coordinates
 from anansi.tcc.telescope_controller import TelescopeController
 logger = logging.getLogger('anansi')
+
+class InvalidTCCCommand(Exception):
+    def __init__(self,xml):
+        message = "Invalid command message sent to TCC: %s"%xml
+        logger.error(message,extra=log.tcc_status(),exc_info=True)
+        super(InvalidTCCMessage,self).__init__(message)
 
 class TCCResponse(object):
     def __init__(self):
@@ -35,13 +42,20 @@ class TCCRequest(object):
         self.tcc_info = None
         self.tracking_mode = None
         self.coordinates = None
-        self.east_arm_active = True
-        self.west_arm_active = True
-        self.force_east_slow = False
-        self.force_west_slow = False
+        self.user = None
+        self.comment = None
+        self.east_state = drives.DISABLED
+        self.west_state = drives.DISABLED
         self.msg = etree.fromstring(xml_string)
+        self.parse_user()
         self.parse_server_commands()
         self.parse_tcc_commands()
+
+    def parse_user(self):
+        user_info = self.msg.find("tcc_request")
+        if user_info is not None:
+            self.user = user_info.find("user").text
+            self.comment = user_info.find("comment").text
 
     def parse_server_commands(self):
         server_cmds = self.msg.find("server_command")
@@ -87,72 +101,51 @@ class TCCServer(TCPServer):
         self.shutdown_requested = Event()
 
     def parse_message(self,msg):
-        logger.info("Parsing received TCC command: %s"%msg)
-        self.log.log_tcc_status("TCCServer.parse_message","info",msg)
+        logger.info("Parsing received TCC command: %s"%msg,extra=log.tcc_status())
         response = TCCResponse()
         try:
             request = TCCRequest(msg)
-            
+
             if not request.server_command and not request.tcc_command:
-                raise Exception("No valid command given")
+                raise InvalidTCCCommand(msg)
             
             if request.server_command:
+                logger.info("Received server command '%s'"%(request.server_command),
+                            extra=log.tcc_command(request.server_command,msg,request.user))
                 if request.server_command == "shutdown":
-                    self.log.log_tcc_status("TCCServer.parse_message","info",
-                                            "Received shutdown message")
                     self.shutdown_requested.set()
                 elif request.server_command == "ping":
                     pass
                 else:
-                    raise Exception("Unknown server command")
+                    raise InvalidTCCCommand(msg)
                 
             if request.tcc_command:
+                logger.info("Received tcc command: %s"%(request.tcc_command),
+                            extra=log.tcc_command(request.tcc_command,msg,request.user))
                 if request.tcc_command == "point":
-                    self.log.log_tcc_status("TCCServer.parse_message","info",
-                                             "Setting east arm state: %s"%(request.east_state))
+                    logger.info("Setting east arm state: %s"%request.east_state,extra=log.tcc_status())
                     self.controller.set_east_state(request.east_state)
-                    
-                    self.log.log_tcc_status("TCCServer.parse_message","info",
-                                            "Setting west arm state: %s"%(request.east_state))
+                    logger.info("Setting west arm state: %s"%request.west_state,extra=log.tcc_status())
                     self.controller.set_west_state(request.west_state)
 
                     info = request.tcc_info
-                    self.log.log_tcc_status("TCCServer.parse_message","info",
-                                            "Received pointing command: %s"%repr(info))
                     coords = make_coordinates(info["x"],info["y"],system=info["system"],
                                               units=info["units"],epoch=info["epoch"])
-                    if info["tracking"]:
-                        self.log.log_tcc_status("TCCServer.parse_message","info",
-                                                "Requesting source track")
-                        self.controller.observe(coords,track=True)
-                    else:
-                        self.log.log_tcc_status("TCCServer.parse_message","info",
-                                                "Requesting drive to source")
-                        self.controller.observe(coords,track=False)
-                        
+                    logger.info("Generated coordinates object of type %s"%type(coords),extra=log.tcc_status())
+                    logger.info("Setting tracking status to %s"%info["tracking"],extra=log.tcc_status())
+                    self.controller.observe(coords,track=info['tracking'])
                 elif request.tcc_command == "wind_stow":
-                    print
-                    print "WIND STOW"
-                    print
-                    self.log.log_tcc_status("TCCServer.parse_message","info",
-                                            "Recieved wind stow command")
                     self.controller.wind_stow()
-                    
                 elif request.tcc_command == "maintenance_stow":
-                    self.log.log_tcc_status("TCCServer.parse_message","info",
-                                            "Recieved maintenance stow command")
                     self.controller.maintenance_stow()
-                    
                 elif request.tcc_command == "stop":
-                    self.log.log_tcc_status("TCCServer.parse_message","info",
-                                            "Recieved stop command")
                     self.controller.stop()
                 else:
-                    raise Exception("Unknown TCC command")
-
+                    raise InvalidTCCCommand(msg)
         except Exception as error:
-            self.log.log_tcc_status("TCCServer.parse_message","error",str(error))
-            response.error(str(error))
+            logger.error("Exception encountered during parsing of TCC command message",
+                         extra=log.tcc_status(),exc_info=True)
+            response.error("TCC command failed: %s"%str(error))
         else:
             response.success("TCC command passed")
         return response

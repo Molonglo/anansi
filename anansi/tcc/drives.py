@@ -77,7 +77,7 @@ class CountError(Exception):
     """
     def __init__(self,message,drive_obj):
         super(CountError,self).__init__(message)
-        logger.warning(message,extra=tcc_status())
+        logger.info(message,extra=tcc_status())
 
 
 class DriveInterface(object):
@@ -91,7 +91,7 @@ class DriveInterface(object):
                  node,ip,port,
                  west_scaling,east_scaling,tilt_zero,
                  minimum_count_limit,slow_drive_limit,
-                 timeout=5.0):
+                 name,timeout=5.0):
         self._node = node
         self._ip = ip
         self._port = port
@@ -100,6 +100,7 @@ class DriveInterface(object):
         self._tilt_zero= tilt_zero
         self._minimum_count_limit = minimum_count_limit
         self._slow_drive_limit = slow_drive_limit
+        self.name = name
         self.timeout = timeout
         self.client = None
         decoder,size = codec.gen_header_decoder(self._node)
@@ -274,7 +275,7 @@ class DriveInterface(object):
             self.status_dict.update(decoded_response)
             msg = ("Received {name} drive position update    east: {east_tilt:.4} "
                    "({east_count})   west: {west_tilt:.4} ({west_count})"
-                   ).format(name=self.name,**self.status_dict))
+                   ).format(name=self.name,**self.status_dict)
             logger.info(msg,extra=log.eZ80_position(self.name,self.status_dict))
         else:
             raise Exception("Unrecognized command option '%s' received from %s drive"%(code,self.name)) 
@@ -494,7 +495,7 @@ class NSDriveInterface(DriveInterface):
             dc.node_name,dc.ip,dc.port,
             dc.west_scaling,dc.east_scaling,dc.tilt_zero,
             dc.minimum_counts,dc.slow_counts,
-            dc.timeout)
+            "ns",dc.timeout)
         self.east_rate = dc.east_rate
         self.west_rate = dc.west_rate
         self.slow_factor = dc.slow_factor
@@ -532,7 +533,7 @@ class MDDriveInterface(DriveInterface):
             dc.node_name,dc.ip,dc.port,
             dc.west_scaling,dc.east_scaling,dc.tilt_zero,
             dc.minimum_counts,dc.slow_counts,
-            dc.timeout)
+            "md",dc.timeout)
         self.east_rate = dc.east_rate
         self.west_rate = dc.west_rate
         self.slow_factor = dc.slow_factor
