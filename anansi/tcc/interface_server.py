@@ -52,10 +52,12 @@ class TCCRequest(object):
         self.parse_tcc_commands()
 
     def parse_user(self):
-        user_info = self.msg.find("tcc_request")
-        if user_info is not None:
-            self.user = user_info.find("user").text
-            self.comment = user_info.find("comment").text
+        tcc_request = self.msg.find("tcc_request")
+        if tcc_request:
+            user_info = tcc_request.find("user_info")
+            if user_info:
+                self.user = user_info.find("name").text
+                self.comment = user_info.find("comment").text
 
     def parse_server_commands(self):
         server_cmds = self.msg.find("server_command")
@@ -102,32 +104,32 @@ class TCCServer(TCPServer):
 
     def parse_message(self,msg):
         logger.info("Parsing received TCC command: %s"%msg,extra=log.tcc_status())
+        _xml_str = msg.replace("'","").replace("\n","")
         response = TCCResponse()
         try:
             request = TCCRequest(msg)
 
             if not request.server_command and not request.tcc_command:
-                raise InvalidTCCCommand(msg)
+                raise InvalidTCCCommand(_xml_str)
             
             if request.server_command:
                 logger.info("Received server command '%s'"%(request.server_command),
-                            extra=log.tcc_command(request.server_command,msg,request.user))
+                            extra=log.tcc_command(request.server_command,_xml_str,request.user))
                 if request.server_command == "shutdown":
                     self.shutdown_requested.set()
                 elif request.server_command == "ping":
                     pass
                 else:
-                    raise InvalidTCCCommand(msg)
+                    raise InvalidTCCCommand(_xml_str)
                 
             if request.tcc_command:
                 logger.info("Received tcc command: %s"%(request.tcc_command),
-                            extra=log.tcc_command(request.tcc_command,msg,request.user))
+                            extra=log.tcc_command(request.tcc_command,_xml_str,request.user))
                 if request.tcc_command == "point":
                     logger.info("Setting east arm state: %s"%request.east_state,extra=log.tcc_status())
                     self.controller.set_east_state(request.east_state)
                     logger.info("Setting west arm state: %s"%request.west_state,extra=log.tcc_status())
                     self.controller.set_west_state(request.west_state)
-
                     info = request.tcc_info
                     coords = make_coordinates(info["x"],info["y"],system=info["system"],
                                               units=info["units"],epoch=info["epoch"])
@@ -141,7 +143,7 @@ class TCCServer(TCPServer):
                 elif request.tcc_command == "stop":
                     self.controller.stop()
                 else:
-                    raise InvalidTCCCommand(msg)
+                    raise InvalidTCCCommand(_xml_str)
         except Exception as error:
             logger.error("Exception encountered during parsing of TCC command message",
                          extra=log.tcc_status(),exc_info=True)

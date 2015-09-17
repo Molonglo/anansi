@@ -34,10 +34,12 @@ STATUS_DICT_DEFAULTS = {
     "EW":"",
     "LMST":"",
     "ns":{
+        "error":"",
         "east":copy.copy(DRIVE_ARM_STATUS),
         "west":copy.copy(DRIVE_ARM_STATUS)
         },
     "md":{
+        "error":"",
         "east":copy.copy(DRIVE_ARM_STATUS),
         "west":copy.copy(DRIVE_ARM_STATUS)
         },
@@ -102,6 +104,8 @@ class StatusServer(TCPServer):
             self.status_dict.update(pos_dict)
         self._get_drive_info(self.controller.ns_drive,"ns")
         self._get_drive_info(self.controller.md_drive,"md")
+        self.status_dict['ns']['error'] = str(self.controller.ns_drive.error_state)
+        self.status_dict['md']['error'] = str(self.controller.md_drive.error_state)
 
     def _xml_from_key(self,key):
         return gen_xml_element(key,str(self.status_dict[key]))
@@ -135,6 +139,7 @@ class StatusServer(TCPServer):
             
         for drive in ["ns","md"]:
             _drive = gen_xml_element(drive)
+            _drive.append(gen_xml_element('error',str(self.status_dict[drive]['error'])))
             for arm in ["east","west"]:
                 _arm = gen_xml_element(arm)
                 _append(_arm,arm,drive)

@@ -124,3 +124,4 @@ class AnansiDataBase(BaseDBManager):
             user=config.database.user,
             passwd=config.database.passwd)
 
+from anansi.config import config

@@ -18,14 +18,15 @@ class TelescopeArmsDisabled(Exception):
         super(TelescopeArmsDisabled,self).__init__(message)
 
 class BaseTracker(Thread):
-    def __init__(self, drive, coords, nsew, rate, tolerance, track):
+    def __init__(self, drive, coords, nsew, rate, tolerance, track, stop):
         self._name = "%s Tracker"%(drive.name.upper())
         self.drive = drive
+        self.drive.clear_error()
         self._track = track
         self.coords = coords
         self.rate = rate
         self.nsew = nsew
-        self._stop = Event()
+        self._stop = stop
         self.tolerance = tolerance
         self.on_source = False
         Thread.__init__(self)
@@ -57,7 +58,7 @@ class BaseTracker(Thread):
             raise Exception("Valid arm names are east and west")
         offset = abs(tilt-x)
         self.on_source = offset<=self.tolerance
-        logger.info("%s drive is %.5f radians from target"%offset,extra=log.tcc_status())
+        logger.info("%s drive is %.5f radians from target"%(self.drive.name,offset))
         return self.on_source
 
     def __mdt(self,t,*args):
@@ -75,6 +76,7 @@ class BaseTracker(Thread):
         dt = fmin(self.__mdt,[0.0,],args=(tilt,),disp=False)[0]
         logger.info("Predicted slew time for %s drive: %.0f"%(self.drive.name,dt),
                     extra=log.tcc_status())
+        return dt
         
     def __mpd(self,t):
         t = abs(t)
@@ -87,7 +89,7 @@ class BaseTracker(Thread):
 
     def set_tilts(self,tilt):
         try:
-            self.info("Setting %s drive tilt to %.5f"%(self.drive.name,tilt),extra=log.tcc_status())
+            logger.info("Setting %s drive tilt to %.5f"%(self.drive.name,tilt),extra=log.tcc_status())
             if self.drive.get_east_state() != drives.DISABLED and self.drive.get_west_state()!=drives.DISABLED:
                 self.drive.set_tilts(tilt,tilt)
             elif self.drive.get_east_state() != drives.DISABLED:
@@ -98,24 +100,40 @@ class BaseTracker(Thread):
                 raise TelescopeArmsDisabled(self.drive.name)
         except CountError:
             sleep(2)
+        except eZ80Error:
+            logger.error("Caught eZ80 error in %s tracker"%(self.drive.name),extra=log.tcc_status())
+            self.end()
         except Exception as error:
             msg = "Set tilt failed on %s drive tracker for tilt %f"%(self.drive.name,tilt)
             logger.error(msg,extra=log.tcc_status(),exc_info=True)
             sleep(2)
     
     def slew(self):
-        while not self.on_target() and not self._stop.is_set():
-            if self.drive.active():
+        while not self.on_target():
+            if self._stop.is_set():
+                self.end()
+                break
+            elif self.drive.has_error():
+                logger.error("%s drive in error state"%(self.drive.name),extra=log.tcc_status())
+                self.end()
+                break
+            elif self.drive.active():
                 sleep(3)
                 continue
-            dt = self.drive_time()
-            date = eph.now() + dt*eph.second
-            self.coords.compute(date)
-            self.set_tilts(getattr(self.coords,self.nsew))
+            else:
+                dt = self.drive_time()
+                date = eph.now() + dt*eph.second
+                self.coords.compute(date)
+                self.set_tilts(getattr(self.coords,self.nsew))
                         
     def track(self):
         while not self._stop.is_set():
-            if self.drive.active() or self.on_target():
+            print self.drive.name,self._stop.is_set()
+            if self.drive.has_error():
+                logger.error("%s drive in error state"%(self.drive.name),extra=log.tcc_status())
+                self.end()
+                break
+            elif self.drive.active() or self.on_target():
                 sleep(3)
                 continue
             else:
@@ -125,35 +143,36 @@ class BaseTracker(Thread):
                 date = eph.now() + pt*eph.second
                 self.coords.compute(date)
                 self.set_tilts(getattr(self.coords,self.nsew))
-                
+                                
     def run(self):
         self.slew()
         if self._track:
             self.track()
             
     def end(self):
+        logger.info("Ending %s drive track"%(self.drive.name),extra=log.tcc_status())
         self._stop.set()
         sleep(2)
         self.drive.stop()
         
 
 class NSTracker(BaseTracker):
-    def __init__(self, drive, coords,track):
+    def __init__(self, drive, coords,track,stop):
         rate = config.ns_drive.east_rate
         tolerance = config.ns_drive.tolerance
-        BaseTracker.__init__(self, drive, coords, "ns", rate, tolerance, track)
+        BaseTracker.__init__(self, drive, coords, "ns", rate, tolerance, track,stop)
 
 class MDTracker(BaseTracker):
-    def __init__(self, drive, coords,track):
+    def __init__(self, drive, coords,track,stop):
         rate = config.md_drive.east_rate
         tolerance = config.md_drive.tolerance
-        BaseTracker.__init__(self, drive, coords, "ew", rate, tolerance, track)
+        BaseTracker.__init__(self, drive, coords, "ew", rate, tolerance, track,stop)
 
 class Tracker(object):
     def __init__(self,ns_drive,md_drive,coords,track=True):
-        
-        self.md_tracker = MDTracker(md_drive,coords.new_instance(),track)
-        self.ns_tracker = NSTracker(ns_drive,coords.new_instance(),track)
+        stop = Event()
+        self.md_tracker = MDTracker(md_drive,coords.new_instance(), track, stop)
+        self.ns_tracker = NSTracker(ns_drive,coords.new_instance(), track, stop)
         self.md_tracker.start()
         self.ns_tracker.start()
         
@@ -164,9 +183,9 @@ class Tracker(object):
         self.ns_tracker.join()
         
     def on_target(self,drive_name,arm):
-        if drive_name == drives.NS_NAME:
+        if drive_name == "ns":
             return self.ns_tracker.on_source
-        elif drive_name == drives.MD_NAME:
+        elif drive_name == "md":
             return self.md_tracker.on_source
         else:
             raise Exception("Valid drive names are ns and md")

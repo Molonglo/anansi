@@ -74,12 +74,13 @@ class DBDispatchHandler(logging.Handler):
         logging.Handler.__init__(self,level=level)
     
     def emit(self,record):
+        record.msg = record.msg.replace("'","").replace("\n","")
         if hasattr(record,"to_database"):
             info = record.to_database
             target = info["target_table"]
             if target == "Commands_TCC":
                 columns = "(utc,command_type,user,xml)"
-                values = "(UTC_TIMESTAMP(),'{cmd_type}','{user}','{xml_msg}')".format(**info)
+                values = "(UTC_TIMESTAMP(),'{command_type}','{user}','{xml}')".format(**info)
             elif target == "Status_TCC":
                 columns = "(utc,level,location,thread_name,message,traceback)"
                 values = ("(UTC_TIMESTAMP(),'{levelname}','{module}:{funcName}',"
@@ -92,19 +93,21 @@ class DBDispatchHandler(logging.Handler):
                 values = "(UTC_TIMESTAMP(),'{response_type}',{code_num},'{drive}')".format(**info)
             elif target == "Position_eZ80":
                 columns = "(utc,drive,west_count,east_count,west_tilt,east_tilt,west_status,east_status)"
-                values = ("VALUES (UTC_TIMESTAMP(),'{drive}',{west_count},{east_count},{west_tilt},"
+                values = ("(UTC_TIMESTAMP(),'{drive}',{west_count},{east_count},{west_tilt},"
                           "{east_tilt},{west_status},{east_status})".format(**info))
             else:
                 return
             query = "INSERT INTO {0} {1} VALUES {2}".format(target,columns,values)
-            self.db.execute_insert(query)
-
+            try:
+                self.db.execute_insert(query)
+            except Exception as error:
+                logger.error("Could not execute query: %s"%query,exc_info=True)
 
 def tcc_command(cmd_type,xml,user):
     return {'to_database':{
             'target_table':"Commands_TCC",
             'command_type':cmd_type,
-            'xml':xml,
+            'xml':xml.replace("'",""),
             'user':user}
             }
 
@@ -113,7 +116,7 @@ def eZ80_position(drive,drive_status):
             'target_table':"Position_eZ80",
             'drive':drive }
               }
-    output.update(drive_status)
+    output['to_database'].update(drive_status)
     return output
     
     
@@ -138,10 +141,14 @@ def tcc_status():
             'target_table':"Status_TCC"}
             }
 
-queue = Queue(-1)
+logging.basicConfig(level=1)
+queue = Queue(64001)
 queue_listner = CustomQueueListener(queue)
 queue_handler = QueueHandler(queue)
-logging.getLogger('anansi').addHandler(queue_handler)
+logger = logging.getLogger('anansi')
+logger.propagate = False
+logger.addHandler(queue_handler)
+logger.setLevel(logging.NOTSET)
 queue_listner.start()
 atexit.register(queue_listner.stop)
 

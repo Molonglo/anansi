@@ -137,7 +137,7 @@ def make_coordinates(x,y,system="equatorial",units="hhmmss",epoch="J2000"):
             y = eph.degrees(d2r(float(y)))
         elif units == "radians":
             x = eph.degrees(float(x))
-            y = eph.degrees(float(x))
+            y = eph.degrees(float(y))
         elif units == "hhmmss":
             if system in ["equatorial_ha","equatorial"]:
                 x = eph.hours(x)
