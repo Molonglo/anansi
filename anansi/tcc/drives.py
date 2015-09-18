@@ -42,6 +42,13 @@ DEFAULT_STATUS_DICT = {
     "west_tilt":0.0
     }
 
+class TelescopeArmsDisabled(Exception):
+    def __init__(self,name):
+        message = "Both telescope arms disabled for %s drive"%(name)
+        logger.error(message,extra=log.tcc_status())
+        super(TelescopeArmsDisabled,self).__init__(message)
+
+
 class eZ80Error(Exception):
     """Generic exception returned from eZ80
 
@@ -55,6 +62,7 @@ class eZ80Error(Exception):
         message = "Exception E:%d caught from %s drive"%(code,drive_obj.name)
         super(eZ80Error,self).__init__(message)
         logger.error(message,extra=log.tcc_status())
+
 
 class eZ80SocketCountError(Exception):
     def __init__(self,count,drive_obj):
@@ -412,8 +420,7 @@ class DriveInterface(object):
     def set_tilts_from_counts(self,east_count,west_count):
         """Set the tilts of the E and W arm NS drives based on encoder counts."""
         if self.west_state == DISABLED and self.east_state == DISABLED:
-            # Should log exception
-            return
+            raise TelescopeArmsDisabled(self.name)
         elif self.west_state == DISABLED:
             self.set_east_tilt_from_counts(east_count)
         elif self.east_state == DISABLED:

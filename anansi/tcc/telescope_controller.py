@@ -5,17 +5,11 @@ import logging
 from scipy.optimize import fmin
 import ephem as eph
 from anansi.utils import gen_xml_element,d2r,r2d
-from anansi.tcc.drives import NSDriveInterface,MDDriveInterface,CountError
+from anansi.tcc.drives import NSDriveInterface,MDDriveInterface,CountError,TelescopeArmsDisabled
 from anansi.tcc import drives
 from anansi.config import config
 from anansi import log
 logger = logging.getLogger('anansi')
-
-class TelescopeArmsDisabled(Exception):
-    def __init__(self,name):
-        message = "Both telescope arms disabled for %s drive"%(name)
-        logger.error(message,extra=log.tcc_status())
-        super(TelescopeArmsDisabled,self).__init__(message)
 
 class BaseTracker(Thread):
     def __init__(self, drive, coords, nsew, rate, tolerance, track, stop):
