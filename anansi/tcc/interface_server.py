@@ -5,10 +5,12 @@ from lxml import etree
 import logging
 from anansi import exit_funcs
 from anansi import log
+from anansi.utils import d2r
 from anansi.tcc import drives
 from anansi.comms import TCPServer,BaseHandler
 from anansi.tcc.coordinates import make_coordinates
 from anansi.tcc.telescope_controller import TelescopeController
+from anansi.config import config
 logger = logging.getLogger('anansi')
 
 class InvalidTCCCommand(Exception):
@@ -125,21 +127,33 @@ class TCCServer(TCPServer):
             if request.tcc_command:
                 logger.info("Received tcc command: %s"%(request.tcc_command),
                             extra=log.tcc_command(request.tcc_command,_xml_str,request.user))
-                if request.tcc_command == "point":
-                    logger.info("Setting east arm state: %s"%request.east_state,extra=log.tcc_status())
-                    self.controller.set_east_state(request.east_state)
-                    logger.info("Setting west arm state: %s"%request.west_state,extra=log.tcc_status())
-                    self.controller.set_west_state(request.west_state)
-                    info = request.tcc_info
-                    coords = make_coordinates(info["x"],info["y"],system=info["system"],
-                                              units=info["units"],epoch=info["epoch"])
-                    logger.info("Generated coordinates object of type %s"%type(coords),extra=log.tcc_status())
-                    logger.info("Setting tracking status to %s"%info["tracking"],extra=log.tcc_status())
-                    self.controller.observe(coords,track=info['tracking'])
-                elif request.tcc_command == "wind_stow":
-                    self.controller.wind_stow()
-                elif request.tcc_command == "maintenance_stow":
-                    self.controller.maintenance_stow()
+                if request.tcc_command in ["point","wind_stow","maintenance_stow"]:
+                    track = False
+                    if request.tcc_command == "point":
+                        logger.info("Setting east arm state: %s"%request.east_state,extra=log.tcc_status())
+                        self.controller.set_east_state(request.east_state)
+                        logger.info("Setting west arm state: %s"%request.west_state,extra=log.tcc_status())
+                        self.controller.set_west_state(request.west_state)
+                        info = request.tcc_info
+                        logger.info("Pointing telescope to %s %s (%s,%s,%s)"%(
+                                info["x"],info["y"],info["system"],info["units"],info["epoch"]),
+                                    extra=log.tcc_status())
+                        coords = make_coordinates(info["x"],info["y"],system=info["system"],
+                                                  units=info["units"],epoch=info["epoch"])
+                        track = info['tracking']
+                    elif request.tcc_command == "wind_stow":
+                        logger.info("Sending telescope to wind stow",extra=log.tcc_status())
+                        ns = d2r(config.presets.wind_stow_ns)
+                        ew = d2r(config.presets.wind_stow_ew)
+                        coords = make_coordinates(ns,ew,system="nsew",units="radians")
+                    elif request.tcc_command == "maintenance_stow":
+                        logger.info("Sending telescope to maintenance stow",extra=log.tcc_status())
+                        ns = d2r(config.presets.maintenance_stow_ns)
+                        ew = d2r(config.presets.maintenance_stow_ew)
+                        coords = make_coordinates(ns,ew,system="nsew",units="radians")
+                    logger.debug("Generated coordinates object of type %s"%type(coords),extra=log.tcc_status())
+                    logger.debug("Setting tracking status to %s"%track,extra=log.tcc_status())
+                    self.controller.observe(coords,track=track)
                 elif request.tcc_command == "stop":
                     self.controller.stop()
                 else:

@@ -128,7 +128,6 @@ class BaseTracker(Thread):
                         
     def track(self):
         while not self._stop.is_set():
-            print self.drive.name,self._stop.is_set()
             if self.drive.has_error():
                 logger.error("%s drive in error state"%(self.drive.name),extra=log.tcc_status())
                 self.end()
@@ -234,7 +233,7 @@ class TelescopeController(object):
     def wind_stow(self):
         self.end_current_track()
         logger.info("Sending telescope to wind stow",extra=log.tcc_status())
-        ns = d2r(config.presets.wind_stow_nw)
+        ns = d2r(config.presets.wind_stow_ns)
         ew = d2r(config.presets.wind_stow_ew)
         
         self._drive_to(ns,ew)
