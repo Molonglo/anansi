@@ -112,8 +112,10 @@ class DriveInterface(object):
         decoder,size = codec.gen_header_decoder(self._node)
         self.header_decoder = decoder
         self.header_size = size
-        self.west_state = AUTO
-        self.east_state = AUTO
+        self._west_state = AUTO
+        self._east_state = AUTO
+        self.west_offset = 0.0
+        self.east_offset = 0.0
         self.error_state = None
         self.active_thread = None
         self._active = Event()
@@ -139,19 +141,23 @@ class DriveInterface(object):
                 "Invalid state: %s.\nValid states are: %s"%(
                     state,VALID_STATES))
         
-    def set_east_state(self,state):
-        self._check_state(state)
-        self.east_state = state
-
-    def set_west_state(self,state):
-        self._check_state(state)
-        self.west_state = state
-
-    def get_east_state(self):
-        return self.east_state
+    @property
+    def east_state(self):
+        return self._east_state
     
-    def get_west_state(self):
-        return self.west_state
+    @east_state.setter
+    def east_state(self,state):
+        self._check_state(state)
+        self._east_state = state
+        
+    @property
+    def west_state(self):
+        return self._west_state
+        
+    @west_state.setter
+    def west_state(self,state):
+        self._check_state(state)
+        self._west_state = state
 
     def _open_client(self):
         try:
@@ -402,14 +408,14 @@ class DriveInterface(object):
 
     def tilts_to_counts(self,east_tilt,west_tilt):
         """Convert tilts in radians to encoder counts."""
-        east_counts = int(self._tilt_zero + self._east_scaling * east_tilt)
-        west_counts = int(self._tilt_zero + self._west_scaling * west_tilt)
+        east_counts = int(self._tilt_zero + self._east_scaling * (east_tilt+self.east_offset))
+        west_counts = int(self._tilt_zero + self._west_scaling * (west_tilt+self.west_offset))
         return east_counts,west_counts
   
     def counts_to_tilts(self,east_counts,west_counts):
         """Convert encoder counts to tilts in radians."""
-        east_tilt = (east_counts-self._tilt_zero)/self._east_scaling
-        west_tilt = (west_counts-self._tilt_zero)/self._west_scaling
+        east_tilt = ((east_counts-self._tilt_zero)/self._east_scaling) - self.east_offset
+        west_tilt = ((west_counts-self._tilt_zero)/self._west_scaling) - self.west_offset
         return east_tilt,west_tilt
 
     def set_tilts(self,east_tilt,west_tilt):
@@ -513,21 +519,31 @@ class NSDriveInterface(DriveInterface):
             dc.west_scaling,dc.east_scaling,dc.tilt_zero,
             dc.minimum_counts,dc.slow_counts,
             "ns",dc.timeout)
-        self.east_rate = dc.east_rate
-        self.west_rate = dc.west_rate
+        self._east_rate = dc.east_rate
+        self._west_rate = dc.west_rate
         self.slow_factor = dc.slow_factor
 
-    def get_east_rate(self):
-        if self.east_state == SLOW:
-            return self.east_rate * self.slow_factor 
+    @property
+    def east_rate(self):
+        if self._east_state == SLOW:
+            return self._east_rate * self.slow_factor
         else:
-            return self.east_rate
+            return self._east_rate
 
-    def get_west_rate(self):
-        if self.west_state == SLOW:
-            return self.west_rate * self.slow_factor
+    @east_rate.setter
+    def east_rate(self,val):
+        self._east_rate = val
+
+    @property
+    def west_rate(self):
+        if self._west_state == SLOW:
+            return self._west_rate * self.slow_factor
         else:
-            return self.west_rate
+            return self._west_rate
+
+    @west_rate.setter
+    def west_rate(self,val):
+        self._west_rate = val
 
     def _get_direction(self,offset):
         return DRIVE_NORTH if offset >= 0 else DRIVE_SOUTH
@@ -554,29 +570,17 @@ class MDDriveInterface(DriveInterface):
         self.east_rate = dc.east_rate
         self.west_rate = dc.west_rate
         self.slow_factor = dc.slow_factor
-
-    def get_east_rate(self):
-        if self.east_state == SLOW:
-            return self.east_rate * self.slow_factor
-        else:
-            return self.east_rate
-
-    def get_west_rate(self):
-        if self.west_state == SLOW:
-            return self.west_rate * self.slow_factor
-        else:
-            return self.west_rate
         
     def tilts_to_counts(self,east_tilt,west_tilt):
         """Convert tilts in radians to encoder counts."""
-        east_counts = int(self._tilt_zero + self._east_scaling * sin(east_tilt))
-        west_counts = int(self._tilt_zero + self._west_scaling * sin(west_tilt))
+        east_counts = int(self._tilt_zero + self._east_scaling * sin(east_tilt+self.east_offset))
+        west_counts = int(self._tilt_zero + self._west_scaling * sin(west_tilt+self.west_offset))
         return east_counts,west_counts
 
     def counts_to_tilts(self,east_counts,west_counts):
         """Convert encoder counts to tilts in radians."""
-        east_tilt = arcsin((east_counts-self._tilt_zero)/self._east_scaling)
-        west_tilt = arcsin((west_counts-self._tilt_zero)/self._west_scaling)
+        east_tilt = arcsin((east_counts-self._tilt_zero)/self._east_scaling) - self.east_offset
+        west_tilt = arcsin((west_counts-self._tilt_zero)/self._west_scaling) - self.west_offset
         return east_tilt,west_tilt
 
     def _get_direction(self,offset):

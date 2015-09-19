@@ -78,15 +78,26 @@ class TCCRequest(object):
                     "units":pointing.attrib.get("units","radians").strip(),
                     "epoch":pointing.attrib.get("epoch","2000").strip(),
                     "x":pointing.find("xcoord").text.strip(),
-                    "y":pointing.find("ycoord").text.strip()
-                    }
+                    "y":pointing.find("ycoord").text.strip()}
                 if self.tcc_info["units"] in ["radians","degrees"]:
                     self.tcc_info["x"] = float(self.tcc_info["x"])
                     self.tcc_info["y"] = float(self.tcc_info["y"])
                 self.tcc_info["tracking"] = self.tcc_info["tracking"] == "on"
-                arm_status = tcc_cmd.find("arms")
-                self.east_state = arm_status.find("east").text
-                self.west_state = arm_status.find("west").text
+                
+                self.drive_info = {}
+                for drive in ['ns','md']:
+                    self.drive_info[drive] = {}
+                    drive_element = tcc_cmd.find(drive)
+                    for arm in ['east','west']:
+                        self.drive_info[drive][arm] = {}
+                        arm_element = drive_element.find(arm)
+                        self.drive_info[drive][arm]['state'] = arm_element.find("state").text
+                        offset_element = arm_element.find("offset")
+                        units = offset_element.attrib.get("units","degrees").strip()
+                        offset = float(offset_element.text)
+                        if units == "degrees":
+                            offset = d2r(offset)
+                        self.drive_info[drive][arm]['offset'] = offset
                 
 
 class TCCRequestHandler(BaseHandler):
@@ -104,13 +115,23 @@ class TCCServer(TCPServer):
         self.controller = controller
         self.shutdown_requested = Event()
 
+    def _set_drive_parameters(self,request):
+        for drive in ['ns','md']:
+            _drive = getattr(self.controller,"%s_drive"%drive)
+            for arm in ['east','west']:
+                state = request.drive_info[drive][arm]['state']
+                offset = request.drive_info[drive][arm]['offset']
+                logger.info("Setting %s drive %s arm state: %s"%(drive,arm,state),extra=log.tcc_status())
+                setattr(_drive,"%s_state"%arm,state)
+                logger.info("Setting %s drive %s arm offset: %s radians"%(drive,arm,offset),extra=log.tcc_status())
+                setattr(_drive,"%s_offset"%arm,offset)
+
     def parse_message(self,msg):
         logger.info("Parsing received TCC command: %s"%msg,extra=log.tcc_status())
         _xml_str = msg.replace("'","").replace("\n","")
         response = TCCResponse()
         try:
             request = TCCRequest(msg)
-
             if not request.server_command and not request.tcc_command:
                 raise InvalidTCCCommand(_xml_str)
             
@@ -130,10 +151,7 @@ class TCCServer(TCPServer):
                 if request.tcc_command in ["point","wind_stow","maintenance_stow"]:
                     track = False
                     if request.tcc_command == "point":
-                        logger.info("Setting east arm state: %s"%request.east_state,extra=log.tcc_status())
-                        self.controller.set_east_state(request.east_state)
-                        logger.info("Setting west arm state: %s"%request.west_state,extra=log.tcc_status())
-                        self.controller.set_west_state(request.west_state)
+                        self._set_drive_parameters(request)
                         info = request.tcc_info
                         logger.info("Pointing telescope to %s %s (%s,%s,%s)"%(
                                 info["x"],info["y"],info["system"],info["units"],info["epoch"]),

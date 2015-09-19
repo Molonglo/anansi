@@ -36,16 +36,39 @@ class TCCMessage(object):
         elem.append(self._gen_element("command",text=command))
         self.root.append(elem)
 
-    def tcc_pointing(self,x,y,east_arm="auto",west_arm="auto",**attributes):
+    def tcc_pointing(self,x,y,
+                     ns_east_state="auto",ns_west_state="auto",
+                     md_east_state="auto",md_west_state="auto",
+                     ns_east_offset=0.0,ns_west_offset=0.0,
+                     md_east_offset=0.0,md_west_offset=0.0,
+                     offset_units="degrees",**attributes):
+        
         elem = self._gen_element("tcc_command")
         elem.append(self._gen_element("command",text="point"))
         pointing = self._gen_element("pointing",attributes=attributes)
         pointing.append(self._gen_element("xcoord",text=str(x)))
         pointing.append(self._gen_element("ycoord",text=str(y)))
-        arms = self._gen_element("arms")
-        arms.append(self._gen_element("east",text=east_arm))
-        arms.append(self._gen_element("west",text=west_arm))
+        
+        ns = self._gen_element("ns")
+        ns_east = self._gen_element("east")
+        ns_east.append(self._gen_element("state",text=ns_east_state))
+        ns_east.append(self._gen_element("offset",text=str(ns_east_offset),attributes={'units':offset_units}))
+        ns_west = self._gen_element("west")
+        ns_west.append(self._gen_element("state",text=ns_west_state))
+        ns_west.append(self._gen_element("offset",text=str(ns_west_offset),attributes={'units':offset_units}))
+        ns.append(ns_east)
+        ns.append(ns_west)
+        md = self._gen_element("md")
+        md_east = self._gen_element("east")
+        md_east.append(self._gen_element("state",text=md_east_state))
+        md_east.append(self._gen_element("offset",text=str(md_east_offset),attributes={'units':offset_units}))
+        md_west = self._gen_element("west")
+        md_west.append(self._gen_element("state",text=md_west_state))
+        md_west.append(self._gen_element("offset",text=str(md_west_offset),attributes={'units':offset_units}))
+        md.append(md_east)
+        md.append(md_west)
         elem.append(pointing)
-        elem.append(arms)
+        elem.append(ns)
+        elem.append(md)
         self.root.append(elem)
 
