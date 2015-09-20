@@ -217,11 +217,21 @@ class DriveInterface(object):
         stopped.                                                                                   
         """
         logger.info("Spawned %s drive thread"%self.name,extra=log.tcc_status())
+        pass_count = 0
+        count_limit = 10
+
         try:
             while not self.event.is_set():
                 code,response = self._parse_message(*self._receive_message())
                 if (code == "I") and (response == 0):
                     break
+                elif self.name=="ns" and self.status_dict['east_status'] == 112 and self.status_dict['west_status'] == 112:
+                    pass_count += 1
+                    print "Driving", self.status_dict['east_status'], self.status_dict['west_status'],pass_count
+                    if pass_count >= count_limit:
+                        logger.error("Both arm motors are not powered for ns drive",extra=log.tcc_status())
+                        break
+
         except Exception as e:
             logger.error("Caught exception in %s drive thread loop"%self.name,extra=log.tcc_status(),exc_info=True)
             raise e
@@ -242,6 +252,7 @@ class DriveInterface(object):
         self._open_client()
         self._active.set()
         self._send_message(drive_code,data)
+        
         while True:
             try:
                 code,response = self._parse_message(*self._receive_message())
