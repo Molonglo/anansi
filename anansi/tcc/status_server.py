@@ -76,8 +76,8 @@ class StatusServer(TCPServer):
         for arm in ['east','west']:
             self.status_dict[drive_name][arm]['count'] = status['%s_count'%arm]
             self.status_dict[drive_name][arm]['system_status'] = status['%s_status'%arm]
-            self.status_dict[drive_name][arm]['tilt'] = status.get('%s_tilt'%arm,0.0)
-            self.status_dict[drive_name][arm]['state'] = getattr(drive,"get_%s_state"%arm)()
+            self.status_dict[drive_name][arm]['tilt'] = status.get('%s_tilt'%arm,0.0) + getattr(drive,"%s_offset"%arm)
+            self.status_dict[drive_name][arm]['state'] = getattr(drive,"%s_state"%arm)
             if self.controller.current_track is not None:
                 self.status_dict[drive_name][arm]['on_target'] = self.controller.current_track.on_target(drive_name,arm)
             self.status_dict[drive_name][arm]['driving'] = drive.active_thread is not None
@@ -85,7 +85,7 @@ class StatusServer(TCPServer):
 
     def update(self):
         if self.controller.coordinates is not None:
-            coords = copy.copy(self.controller.coordinates)
+            coords = self.controller.coordinates.new_instance()
             coords.compute()
             pos_dict = {
                 "RA":str(coords.ra),

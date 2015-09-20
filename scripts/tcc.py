@@ -4,6 +4,8 @@ from anansi.config import config,update_config_from_args
 from anansi.tcc.interface_server import TCCServer
 from anansi.tcc.status_server import StatusServer
 from anansi.tcc.telescope_controller import TelescopeController
+import faulthandler
+faulthandler.enable()
 
 def main():
     controller = TelescopeController()
