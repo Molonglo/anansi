@@ -233,7 +233,7 @@ class Controls(tk.Frame):
 
     def maintenance_stow(self):
         msg = TCCMessage("tcc_gui")
-        msg.tcc_command("maintenace_stow")
+        msg.tcc_command("maintenance_stow")
         self.send_recv_anansi(msg)
 
     def stop(self):
