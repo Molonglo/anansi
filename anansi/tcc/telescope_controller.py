@@ -5,7 +5,7 @@ import logging
 from scipy.optimize import fmin
 import ephem as eph
 from anansi.utils import gen_xml_element,d2r,r2d
-from anansi.tcc.drives import NSDriveInterface,MDDriveInterface,CountError,TelescopeArmsDisabled
+from anansi.tcc.drives import NSDriveInterface,MDDriveInterface,CountError,TelescopeArmsDisabled,eZ80Error
 from anansi.tcc import drives
 from anansi.config import config
 from anansi import log
@@ -27,16 +27,16 @@ class BaseTracker(Thread):
 
     def _max_tilt_offset(self,tilt):
         state = self.drive.get_status()
-        if self.drive.get_east_state() != drives.DISABLED and self.drive.get_west_state()!=drives.DISABLED:
+        if self.drive.east_state != drives.DISABLED and self.drive.west_state!=drives.DISABLED:
             east_offset = abs(state["east_tilt"]-tilt)
             west_offset = abs(state["west_tilt"]-tilt)
             if east_offset >= west_offset:
                 return state["east_tilt"]
             else:
                 return state["west_tilt"]
-        elif self.drive.get_east_state() != drives.DISABLED:
+        elif self.drive.east_state != drives.DISABLED:
             return state["east_tilt"]
-        elif self.drive.get_west_state() != drives.DISABLED:
+        elif self.drive.west_state != drives.DISABLED:
             return state["west_tilt"]
         else:
             raise TelescopeArmsDisabled(self.drive.name)
@@ -84,11 +84,11 @@ class BaseTracker(Thread):
     def set_tilts(self,tilt):
         try:
             logger.info("Setting %s drive tilt to %.5f"%(self.drive.name,tilt),extra=log.tcc_status())
-            if self.drive.get_east_state() != drives.DISABLED and self.drive.get_west_state()!=drives.DISABLED:
+            if self.drive.east_state != drives.DISABLED and self.drive.west_state!=drives.DISABLED:
                 self.drive.set_tilts(tilt,tilt)
-            elif self.drive.get_east_state() != drives.DISABLED:
+            elif self.drive.east_state != drives.DISABLED:
                 self.drive.set_east_tilt(tilt)
-            elif self.drive.get_west_state() != drives.DISABLED:
+            elif self.drive.west_state != drives.DISABLED:
                 self.drive.set_west_tilt(tilt)
             else:
                 raise TelescopeArmsDisabled(self.drive.name)
@@ -136,7 +136,7 @@ class BaseTracker(Thread):
                 date = eph.now() + pt*eph.second
                 self.coords.compute(date)
                 self.set_tilts(getattr(self.coords,self.nsew))
-                                
+                
     def run(self):
         self.slew()
         if self._track:
@@ -194,14 +194,6 @@ class TelescopeController(object):
         self.ns_drive.clean_up()
         self.md_drive.clean_up()
 
-    def set_east_state(self,state):
-        self.ns_drive.set_east_state(state)
-        self.md_drive.set_east_state(state)
-
-    def set_west_state(self,state):
-        self.ns_drive.set_west_state(state)
-        self.md_drive.set_west_state(state)
-        
     def stop(self):
         logger.info("Ending tracks and stopping telescope",extra=log.tcc_status())
         self.end_current_track()

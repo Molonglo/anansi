@@ -11,9 +11,9 @@ COORD_SYSTEMS = {
     "equatorial":["RA","Dec"],
     "equatorial_ha":["HA","Dec"],
     "galactic":["Glong","Glat"],
-    "ewdec":["East","Dec"],
+    "ecliptic":["Elong","Elat"],
     "horizontal":["Az","Elv"],
-    "nsew":["NSe","NSw"]
+    "nsew":["NS","EW"]
 }
 
 UNITS = {
@@ -42,21 +42,34 @@ class LabeledCheckButton(tk.Frame):
 class ArmController(tk.Frame):
     def __init__(self,parent,label_text):
         tk.Frame.__init__(self,parent)
-        tk.Label(self,text=label_text).pack(side=tk.LEFT)
+        tk.Label(self,text=label_text,width=5).pack(side=tk.LEFT)
+        tk.Label(self,text="State").pack(side=tk.LEFT)
         self.state_var = tk.StringVar()
         self.state_menu = tk.OptionMenu(self, self.state_var, "auto", "slow", "disabled")
+        self.state_menu.config(width=6,padx=20)
         self.state_var.set("auto")
-        self.state_menu.pack(side=tk.RIGHT)
+        self.state_menu.pack(side=tk.LEFT)
+        self.offset_entry = ParamController(self,"Offset","0.0")
+        self.offset_entry.pack(side=tk.LEFT)
+        tk.Label(self.offset_entry,text="degrees").pack(side=tk.LEFT)
 
-        
+    @property
+    def state(self):
+        return self.state_var.get()
 
-class Arms(tk.Frame):
-    def __init__(self,parent):
-        tk.Frame.__init__(self,parent)
-        self.east = ArmController(self,"East Arm")
-        self.east.pack()
-        self.west = ArmController(self,"West Arm")
-        self.west.pack()
+    @property
+    def offset(self):
+        return float(self.offset_entry.get())
+    
+
+class DriveController(tk.Frame):
+    def __init__(self,parent,name):
+        tk.Frame.__init__(self,parent,relief=tk.SUNKEN,borderwidth=2,padx=5,pady=20)
+        tk.Label(self,text=name).pack(side=tk.TOP)
+        self.east = ArmController(self,"East:")
+        self.east.pack(side=tk.TOP)
+        self.west = ArmController(self,"West:")
+        self.west.pack(side=tk.TOP)
 
 
 class ParamController(tk.Frame):
@@ -71,7 +84,7 @@ class ParamController(tk.Frame):
         self.entry = tk.Entry(self,textvariable=self.value, validate='all',
                               validatecommand=(validator, '%P', '%s'),width=12)
         self.label.pack(side=tk.LEFT)
-        self.entry.pack(side=tk.RIGHT)
+        self.entry.pack(side=tk.LEFT)
 
     def set_bg(self,c):
         try:
@@ -102,7 +115,7 @@ class ParamController(tk.Frame):
 
 class CoordController(tk.Frame):
     def __init__(self,parent):
-        tk.Frame.__init__(self,parent)
+        tk.Frame.__init__(self,parent,relief=tk.SUNKEN,borderwidth=2,padx=5,pady=20)
         tk.Label(self,text="Coordinates").pack(side=tk.TOP)
         
         self.system = tk.StringVar()
@@ -147,7 +160,7 @@ class CoordController(tk.Frame):
 
 class Controls(tk.Frame):
     def __init__(self,parent,anansi_ip,anansi_port,
-                 status_ip,status_port,pos,arms):
+                 status_ip,status_port,pos,ns_drive,md_drive):
         tk.Frame.__init__(self,parent)
         self.parent = parent
         self.anansi_ip = anansi_ip
@@ -155,8 +168,8 @@ class Controls(tk.Frame):
         self.status_ip = status_ip
         self.status_port = status_port
         self.pos = pos
-        self.east_arm = arms.east
-        self.west_arm = arms.west
+        self.ns_drive = ns_drive
+        self.md_drive = md_drive
         tk.Button(self,text="Observe",command=self.observe).pack(side=tk.LEFT)
         tk.Button(self,text="Wind Stow",command=self.wind_stow,state=tk.DISABLED).pack(side=tk.LEFT)
         tk.Button(self,text="Maintenance Stow",command=self.maintenance_stow,state=tk.DISABLED
@@ -194,19 +207,24 @@ class Controls(tk.Frame):
     def observe(self):
         system = self.pos.system.get()
         units = self.pos.units.get()
-        if system in ["equatorial_ha","ewdec"]:
+        if system in ["equatorial_ha","horizontal","nsew"]:
             track = "off"
         else:
             track = "on"
-        east_state = self.east_arm.state_var.get()
-        west_state = self.west_arm.state_var.get()
         x,y = self.pos.get_xy()
         msg = TCCMessage("tcc_gui")
         msg.tcc_pointing(x,y,system=system,
                          tracking=track,
-                         east_arm=east_state,
-                         west_arm=west_state,
-                         units=units)
+                         ns_east_state=self.ns_drive.east.state,
+                         ns_west_state=self.ns_drive.west.state,
+                         md_east_state=self.md_drive.east.state,
+                         md_west_state=self.md_drive.west.state,
+                         ns_east_offset=self.ns_drive.east.offset,
+                         ns_west_offset=self.ns_drive.west.offset,
+                         md_east_offset=self.md_drive.east.offset,
+                         md_west_offset=self.md_drive.west.offset,
+                         units=units,
+                         offset_units="degrees")
         self.send_recv_anansi(msg)
 
     def wind_stow(self):
@@ -234,13 +252,15 @@ class TCCGraphicalInterface(tk.Frame):
         self.parent = parent
         frame = tk.Frame(self)
         self.coord = CoordController(frame)
-        self.coord.pack(side=tk.LEFT)
-        self.arms = Arms(frame)
-        self.arms.pack(side=tk.LEFT)
+        self.coord.pack(side=tk.TOP)
+        self.ns_drive = DriveController(frame,"NS Drive")
+        self.ns_drive.pack(side=tk.TOP)
+        self.md_drive = DriveController(frame,"MD Drive")
+        self.md_drive.pack(side=tk.TOP)
         frame.pack(side=tk.TOP,padx=20)
         self.controls = Controls(self,anansi_ip,anansi_port,
                                  status_ip,status_port,
-                                 self.coord,self.arms)
+                                 self.coord,self.ns_drive,self.md_drive)
         self.controls.pack(side=tk.BOTTOM,pady=15)
 
 

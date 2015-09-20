@@ -1,5 +1,5 @@
 from copy import copy
-from threading import Thread,Event
+from threading import Thread,Event,Lock
 from time import sleep
 from struct import pack,unpack
 from anansi import codec
@@ -112,12 +112,15 @@ class DriveInterface(object):
         decoder,size = codec.gen_header_decoder(self._node)
         self.header_decoder = decoder
         self.header_size = size
-        self.west_state = AUTO
-        self.east_state = AUTO
+        self._west_state = AUTO
+        self._east_state = AUTO
+        self.west_offset = 0.0
+        self.east_offset = 0.0
         self.error_state = None
         self.active_thread = None
         self._active = Event()
         self.event = Event()
+        self.lock = Lock()
         self.status_dict = copy(DEFAULT_STATUS_DICT)
         self.exit_funcs = exit_funcs
         self.exit_funcs.register(self.clean_up)
@@ -139,19 +142,23 @@ class DriveInterface(object):
                 "Invalid state: %s.\nValid states are: %s"%(
                     state,VALID_STATES))
         
-    def set_east_state(self,state):
-        self._check_state(state)
-        self.east_state = state
-
-    def set_west_state(self,state):
-        self._check_state(state)
-        self.west_state = state
-
-    def get_east_state(self):
-        return self.east_state
+    @property
+    def east_state(self):
+        return self._east_state
     
-    def get_west_state(self):
-        return self.west_state
+    @east_state.setter
+    def east_state(self,state):
+        self._check_state(state)
+        self._east_state = state
+        
+    @property
+    def west_state(self):
+        return self._west_state
+        
+    @west_state.setter
+    def west_state(self,state):
+        self._check_state(state)
+        self._west_state = state
 
     def _open_client(self):
         try:
@@ -170,7 +177,13 @@ class DriveInterface(object):
             self.client = None
         
     def _receive_message(self):
-        response = self.client.receive(self.header_size)
+        self.lock.acquire()
+        try:
+            response = self.client.receive(self.header_size)
+        except Exception as error:
+            raise error
+        finally:
+            self.lock.release()
         header = codec.simple_decoder(response,self.header_decoder)
         data_size = header["HOB"]*256+header["LOB"]
         if data_size > 0:
@@ -258,12 +271,15 @@ class DriveInterface(object):
             except Exception as error:
                 logger.error("Caught exception in %s drive preparation"%self.name,extra=log.tcc_status(),exc_info=True)
                 self._close_client()
+                self.error_state = error
+                self._active.clear()
                 raise error
-            if (code == "S") and (response == 0):
-                self.active_thread = Thread(target=self._drive_thread)
-                self.active_thread.daemon = True
-                self.active_thread.start()
-                break
+            else:
+                if (code == "S") and (response == 0):
+                    self.active_thread = Thread(target=self._drive_thread)
+                    self.active_thread.daemon = True
+                    self.active_thread.start()
+                    break
 
 
     def _parse_message(self,header,data):
@@ -302,7 +318,9 @@ class DriveInterface(object):
                    ).format(name=self.name,**self.status_dict)
             logger.info(msg,extra=log.eZ80_position(self.name,self.status_dict))
         else:
-            raise Exception("Unrecognized command option '%s' received from %s drive"%(code,self.name)) 
+            error = Exception("Unrecognized command option '%s' (ascii byte) received from %s drive"%(unpack("B",code),self.name))
+            self.error_state = error
+            raise error
         if code == "E":
             error = eZ80Error(decoded_response,self)
             self.error_state = error
@@ -325,8 +343,8 @@ class DriveInterface(object):
         Returns: Status dictionary                                                                 
         """
         if not self.active():
-            self._open_client()
             try:
+                self._open_client()
                 self._send_message("U",None)
                 code = None
                 while code != "U":
@@ -335,6 +353,7 @@ class DriveInterface(object):
                     code,_ = self._parse_message(*self._receive_message())
             except Exception as error:
                 logger.error("Could not retreive drive status",extra=log.tcc_status(),exc_info=True)
+                self.error_state = error
                 raise error
             finally:
                 self._close_client()
@@ -412,14 +431,14 @@ class DriveInterface(object):
 
     def tilts_to_counts(self,east_tilt,west_tilt):
         """Convert tilts in radians to encoder counts."""
-        east_counts = int(self._tilt_zero + self._east_scaling * east_tilt)
-        west_counts = int(self._tilt_zero + self._west_scaling * west_tilt)
+        east_counts = int(self._tilt_zero + self._east_scaling * (east_tilt+self.east_offset))
+        west_counts = int(self._tilt_zero + self._west_scaling * (west_tilt+self.west_offset))
         return east_counts,west_counts
   
     def counts_to_tilts(self,east_counts,west_counts):
         """Convert encoder counts to tilts in radians."""
-        east_tilt = (east_counts-self._tilt_zero)/self._east_scaling
-        west_tilt = (west_counts-self._tilt_zero)/self._west_scaling
+        east_tilt = ((east_counts-self._tilt_zero)/self._east_scaling) - self.east_offset
+        west_tilt = ((west_counts-self._tilt_zero)/self._west_scaling) - self.west_offset
         return east_tilt,west_tilt
 
     def set_tilts(self,east_tilt,west_tilt):
@@ -523,21 +542,31 @@ class NSDriveInterface(DriveInterface):
             dc.west_scaling,dc.east_scaling,dc.tilt_zero,
             dc.minimum_counts,dc.slow_counts,
             "ns",dc.timeout)
-        self.east_rate = dc.east_rate
-        self.west_rate = dc.west_rate
+        self._east_rate = dc.east_rate
+        self._west_rate = dc.west_rate
         self.slow_factor = dc.slow_factor
 
-    def get_east_rate(self):
-        if self.east_state == SLOW:
-            return self.east_rate * self.slow_factor 
+    @property
+    def east_rate(self):
+        if self._east_state == SLOW:
+            return self._east_rate * self.slow_factor
         else:
-            return self.east_rate
+            return self._east_rate
 
-    def get_west_rate(self):
-        if self.west_state == SLOW:
-            return self.west_rate * self.slow_factor
+    @east_rate.setter
+    def east_rate(self,val):
+        self._east_rate = val
+
+    @property
+    def west_rate(self):
+        if self._west_state == SLOW:
+            return self._west_rate * self.slow_factor
         else:
-            return self.west_rate
+            return self._west_rate
+
+    @west_rate.setter
+    def west_rate(self,val):
+        self._west_rate = val
 
     def _get_direction(self,offset):
         return DRIVE_NORTH if offset >= 0 else DRIVE_SOUTH
@@ -564,29 +593,17 @@ class MDDriveInterface(DriveInterface):
         self.east_rate = dc.east_rate
         self.west_rate = dc.west_rate
         self.slow_factor = dc.slow_factor
-
-    def get_east_rate(self):
-        if self.east_state == SLOW:
-            return self.east_rate * self.slow_factor
-        else:
-            return self.east_rate
-
-    def get_west_rate(self):
-        if self.west_state == SLOW:
-            return self.west_rate * self.slow_factor
-        else:
-            return self.west_rate
         
     def tilts_to_counts(self,east_tilt,west_tilt):
         """Convert tilts in radians to encoder counts."""
-        east_counts = int(self._tilt_zero + self._east_scaling * sin(east_tilt))
-        west_counts = int(self._tilt_zero + self._west_scaling * sin(west_tilt))
+        east_counts = int(self._tilt_zero + self._east_scaling * sin(east_tilt+self.east_offset))
+        west_counts = int(self._tilt_zero + self._west_scaling * sin(west_tilt+self.west_offset))
         return east_counts,west_counts
 
     def counts_to_tilts(self,east_counts,west_counts):
         """Convert encoder counts to tilts in radians."""
-        east_tilt = arcsin((east_counts-self._tilt_zero)/self._east_scaling)
-        west_tilt = arcsin((west_counts-self._tilt_zero)/self._west_scaling)
+        east_tilt = arcsin((east_counts-self._tilt_zero)/self._east_scaling) - self.east_offset
+        west_tilt = arcsin((west_counts-self._tilt_zero)/self._west_scaling) - self.west_offset
         return east_tilt,west_tilt
 
     def _get_direction(self,offset):
