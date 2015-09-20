@@ -227,7 +227,6 @@ class DriveInterface(object):
                     break
                 elif self.name=="ns" and self.status_dict['east_status'] == 112 and self.status_dict['west_status'] == 112:
                     pass_count += 1
-                    print "Driving", self.status_dict['east_status'], self.status_dict['west_status'],pass_count
                     if pass_count >= count_limit:
                         logger.error("Both arm motors are not powered for ns drive",extra=log.tcc_status())
                         break
