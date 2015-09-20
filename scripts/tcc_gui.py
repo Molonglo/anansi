@@ -171,9 +171,8 @@ class Controls(tk.Frame):
         self.ns_drive = ns_drive
         self.md_drive = md_drive
         tk.Button(self,text="Observe",command=self.observe).pack(side=tk.LEFT)
-        tk.Button(self,text="Wind Stow",command=self.wind_stow,state=tk.DISABLED).pack(side=tk.LEFT)
-        tk.Button(self,text="Maintenance Stow",command=self.maintenance_stow,state=tk.DISABLED
-                  ).pack(side=tk.LEFT)
+        tk.Button(self,text="Wind Stow",command=self.wind_stow).pack(side=tk.LEFT)
+        tk.Button(self,text="Maintenance Stow",command=self.maintenance_stow).pack(side=tk.LEFT)
         tk.Button(self,text="Stop",command=self.stop).pack(side=tk.LEFT)
         tk.Button(self,text="Status",command=self.recv_status).pack(side=tk.LEFT)
         tk.Button(self,text="Close",command=self.close).pack(side=tk.LEFT)
