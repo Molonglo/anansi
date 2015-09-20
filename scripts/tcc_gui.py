@@ -11,7 +11,7 @@ COORD_SYSTEMS = {
     "equatorial":["RA","Dec"],
     "equatorial_ha":["HA","Dec"],
     "galactic":["Glong","Glat"],
-    "ewdec":["East","Dec"],
+    "ecliptic":["Elong","Elat"],
     "horizontal":["Az","Elv"],
     "nsew":["NS","EW"]
 }
@@ -207,7 +207,7 @@ class Controls(tk.Frame):
     def observe(self):
         system = self.pos.system.get()
         units = self.pos.units.get()
-        if system in ["equatorial_ha","ewdec"]:
+        if system in ["equatorial_ha","horizontal","nsew"]:
             track = "off"
         else:
             track = "on"

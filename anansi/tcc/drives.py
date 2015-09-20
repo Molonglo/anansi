@@ -1,5 +1,5 @@
 from copy import copy
-from threading import Thread,Event
+from threading import Thread,Event,Lock
 from time import sleep
 from struct import pack,unpack
 from anansi import codec
@@ -120,6 +120,7 @@ class DriveInterface(object):
         self.active_thread = None
         self._active = Event()
         self.event = Event()
+        self.lock = Lock()
         self.status_dict = copy(DEFAULT_STATUS_DICT)
         self.exit_funcs = exit_funcs
         self.exit_funcs.register(self.clean_up)
@@ -176,7 +177,13 @@ class DriveInterface(object):
             self.client = None
         
     def _receive_message(self):
-        response = self.client.receive(self.header_size)
+        self.lock.acquire()
+        try:
+            response = self.client.receive(self.header_size)
+        except Exception as error:
+            raise error
+        finally:
+            self.lock.release()
         header = codec.simple_decoder(response,self.header_decoder)
         data_size = header["HOB"]*256+header["LOB"]
         if data_size > 0:
@@ -254,12 +261,15 @@ class DriveInterface(object):
             except Exception as error:
                 logger.error("Caught exception in %s drive preparation"%self.name,extra=log.tcc_status(),exc_info=True)
                 self._close_client()
+                self.error_state = error
+                self._active.clear()
                 raise error
-            if (code == "S") and (response == 0):
-                self.active_thread = Thread(target=self._drive_thread)
-                self.active_thread.daemon = True
-                self.active_thread.start()
-                break
+            else:
+                if (code == "S") and (response == 0):
+                    self.active_thread = Thread(target=self._drive_thread)
+                    self.active_thread.daemon = True
+                    self.active_thread.start()
+                    break
 
 
     def _parse_message(self,header,data):
@@ -298,7 +308,9 @@ class DriveInterface(object):
                    ).format(name=self.name,**self.status_dict)
             logger.info(msg,extra=log.eZ80_position(self.name,self.status_dict))
         else:
-            raise Exception("Unrecognized command option '%s' received from %s drive"%(code,self.name)) 
+            error = Exception("Unrecognized command option '%s' (ascii byte) received from %s drive"%(unpack("B",code),self.name))
+            self.error_state = error
+            raise error
         if code == "E":
             error = eZ80Error(decoded_response,self)
             self.error_state = error
@@ -321,8 +333,8 @@ class DriveInterface(object):
         Returns: Status dictionary                                                                 
         """
         if not self.active():
-            self._open_client()
             try:
+                self._open_client()
                 self._send_message("U",None)
                 code = None
                 while code != "U":
@@ -331,6 +343,7 @@ class DriveInterface(object):
                     code,_ = self._parse_message(*self._receive_message())
             except Exception as error:
                 logger.error("Could not retreive drive status",extra=log.tcc_status(),exc_info=True)
+                self.error_state = error
                 raise error
             finally:
                 self._close_client()

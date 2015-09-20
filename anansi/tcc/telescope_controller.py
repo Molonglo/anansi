@@ -5,7 +5,7 @@ import logging
 from scipy.optimize import fmin
 import ephem as eph
 from anansi.utils import gen_xml_element,d2r,r2d
-from anansi.tcc.drives import NSDriveInterface,MDDriveInterface,CountError,TelescopeArmsDisabled
+from anansi.tcc.drives import NSDriveInterface,MDDriveInterface,CountError,TelescopeArmsDisabled,eZ80Error
 from anansi.tcc import drives
 from anansi.config import config
 from anansi import log
@@ -136,7 +136,7 @@ class BaseTracker(Thread):
                 date = eph.now() + pt*eph.second
                 self.coords.compute(date)
                 self.set_tilts(getattr(self.coords,self.nsew))
-                                
+                
     def run(self):
         self.slew()
         if self._track:

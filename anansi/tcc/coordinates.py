@@ -143,11 +143,10 @@ def make_coordinates(x,y,system="equatorial",units="hhmmss",epoch="J2000"):
                 x = eph.hours(x)
             else:
                 x = eph.degrees(x)
-                y = eph.degrees(y)
+            y = eph.degrees(y)
         else:
             raise Exception("Invalid units. Must be degrees, radians or hhmmss.")
     except Exception as error:
-        print str(error)
         raise Exception("Invalid coordinates: %s, %s"%(x,y))
 
     if system in ["equatorial","radec"]:
@@ -167,7 +166,10 @@ def make_coordinates(x,y,system="equatorial",units="hhmmss",epoch="J2000"):
     elif system in ["galactic","glgb"]:
         eq = eph.Equatorial(eph.Galactic(x,y))
         return RADecCoordinates(eq.ra,eq.dec,epoch)
-        
+
+    elif system == "ecliptic":
+        eq = eph.Equatorial(eph.Ecliptic(x,y))
+        return RADecCoordinates(eq.ra,eq.dec,epoch)
     else:
         raise Exception("Unknown coordinate system: %s"%system)
     
