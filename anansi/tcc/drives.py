@@ -242,20 +242,43 @@ class DriveInterface(object):
         stopped.                                                                                   
         """
         logger.info("Spawned %s drive thread"%self.name,extra=log.tcc_status())
-        pass_count = 0
+        east_reached = False
+        west_reached = False
+        east_pass_count = 0
+        west_pass_count = 0
         count_limit = 10
-
+        
         try:
             while not self.event.is_set():
                 code,response = self._parse_message(*self._receive_message())
                 if (code == "I") and (response == 0):
                     break
-                elif self.name=="ns" and self.status_dict['east_status'] == 112 and self.status_dict['west_status'] == 112:
-                    pass_count += 1
-                    if pass_count >= count_limit:
-                        logger.error("Both arm motors are not powered for ns drive",extra=log.tcc_status())
+                
+                if self.name=="ns":
+                    if (code == "I") and (response == 13):
+                        west_reached = True
+                        continue
+                    elif (code == "I") and (response == 14):
+                        east_reached = True
+                        continue
+                        
+                    if not east_reached and self.status_dict['east_status'] == 112:
+                        east_pass_count += 1
+                    if not west_reached and self.status_dict['west_status'] == 112:
+                        west_pass_count +=1
+                    
+                    west_fucked = west_pass_count >= count_limit
+                    east_fucked = east_pass_count >= count_limit
+                    if east_fucked and west_fucked:
+                        logger.error("Both arm motors are not running for ns drive",extra=log.tcc_status())
                         break
-
+                    elif east_fucked:
+                        logger.error("East arm motor is not running for ns drive",extra=log.tcc_status())
+                        break
+                    elif west_fucked:
+                        logger.error("West arm motor is not running for ns drive",extra=log.tcc_status())
+                        break
+                    
         except Exception as e:
             logger.error("Caught exception in %s drive thread loop"%self.name,extra=log.tcc_status(),exc_info=True)
             raise e
