@@ -630,4 +630,5 @@ if __name__ == "__main__":
     status = config.status_server
     ui = TCCGraphicalInterface(root,tcc.ip,tcc.port,status.ip,status.port)
     ui.pack()
+    root.wm_title("Anansi TCC Interface")
     root.mainloop()

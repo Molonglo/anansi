@@ -7,6 +7,9 @@ from ConfigParser import ConfigParser
 DEFAULT_CONFIG = "anansi.cfg"
 DEFAULT_PATH = environ["ANANSI_CONFIG"]
 
+#eZ80 codes
+EZ80_CODES_CONFIG = "eZ80_codes.cfg"
+
 def guess_type(data):
     types = [int,float,complex,str]
     for typename in types:
@@ -24,16 +27,20 @@ def guess_type(data):
 class AnansiConfig(object):
     def update(self,config):
         for section in config.sections():
-            if not hasattr(self,section):
-                self.__setattr__(section,ConfigSection())
+            self.add_section(section)
             self.__getattribute__(section).update(section,config)
     
+    def add_section(self,name):
+        if not hasattr(self,name):
+            self.__setattr__(name,ConfigSection())
+        
     def __repr__(self):
         msg = []
         for key,val in self.__dict__.items():
             msg.append("[%s]"%key)
             msg.append(repr(val)+"\n")
         return "\n".join(msg)
+
 
 class ConfigSection(object):
     def update(self,name,config):
@@ -45,6 +52,23 @@ class ConfigSection(object):
         for key,val in self.__dict__.items():
             msg.append("%s: %s"%(key,val))
         return "\n".join(msg)
+
+
+class EZ80Codes(object):
+    def __init__(self,config):
+        self._code_to_name_map = {}
+        self._name_to_code_map = {}
+        for code in config.sections():
+            for name,num in config.items(code):
+                self._code_to_name_map[(code,int(num))] = name
+                self._name_to_code_map[name] = (code,int(num))
+
+    def get_string(self,code,num):
+        return self._code_to_name_map[(code,num)]
+
+    def get_code(self,name):
+        return self._name_to_code_map[name.lower()]
+    
 
 config = AnansiConfig()
     
@@ -67,6 +91,9 @@ def build_config(config_file=None):
     if config_file is not None:
         _config.read(_find_file(config_file))
     config.update(_config)
+    _config = ConfigParser()
+    _config.read(_find_file(EZ80_CODES_CONFIG))
+    config.eZ80_codes = EZ80Codes(_config)
     
 def update_config_from_args(args):
     _config = ConfigParser()
