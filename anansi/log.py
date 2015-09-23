@@ -1,6 +1,7 @@
 import logging
 import logging.handlers
 import atexit
+from struct import unpack
 from Queue import Queue
 from threading import Thread,Event
 from logutils.queue import QueueHandler, QueueListener
@@ -129,11 +130,16 @@ def eZ80_status(drive,response_type,code_num):
             }
 
 def eZ80_command(code,data,drive):
+    if data is None:
+        data = 'None'
+    else:
+        data = str(unpack("B"*len(data),data))
+
     return {'to_database':{
             'target_table':"Commands_eZ80",
             'drive':drive,
             'code':code,
-            'message':str(data)}
+            'message':data}
             }
 
 def tcc_status():

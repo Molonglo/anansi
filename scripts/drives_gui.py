@@ -50,7 +50,7 @@ class ParamController(tk.Frame):
         self.value.set(val)
         self.label = tk.Label(self,textvariable=self.text,justify=tk.LEFT,width=4)
         validator = self.register(self.validator)
-        self.entry = tk.Entry(self,textvariable=self.value, validate='all',
+        self.entry = tk.Entry(self,textvariable=self.value, validate='key',
                               validatecommand=(validator, '%P', '%s'),width=12)
         self.label.pack(side=tk.LEFT)
         self.entry.pack(side=tk.RIGHT)

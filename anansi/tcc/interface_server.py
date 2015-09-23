@@ -17,7 +17,7 @@ class InvalidTCCCommand(Exception):
     def __init__(self,xml):
         message = "Invalid command message sent to TCC: %s"%xml
         logger.error(message,extra=log.tcc_status(),exc_info=True)
-        super(InvalidTCCMessage,self).__init__(message)
+        super(InvalidTCCCommand,self).__init__(message)
 
 class TCCResponse(object):
     def __init__(self):

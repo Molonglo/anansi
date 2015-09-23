@@ -90,3 +90,25 @@ def hadec_to_nsew(ha,dec,lat=lat,skew=skew,slope=slope):
     R = np.dot(nsew_to_azel_matrix(skew,slope),azel_to_hadec_matrix(lat))
     ns,ew = transform(ha,dec,R.T)
     return ns,ew
+
+def _catch_discontinuitues(ns,ew,tol=0.4):
+    idxs = np.where(np.sqrt((ns[:-1] - ns[1:])**2 + (ew[:-1] - ew[1:])**2)>tol)
+    for idx in idxs:
+        ew = np.insert(ew,idx+1,np.nan)
+        ns = np.insert(ns,idx+1,np.nan)
+    return ns,ew
+
+def nsew_of_constant_dec(ha,dec):
+    R = np.dot(nsew_to_azel_matrix(skew,slope),azel_to_hadec_matrix(lat))
+    P = pos_vector(ha,np.ones_like(ha)*dec)
+    ns,ew = pos_from_vector(np.dot(R,np.transpose(P,(2,0,1))).transpose((1,2,0)).squeeze().transpose())
+    ns,ew = _catch_discontinuitues(ns,ew)
+    return np.array((ns,ew))
+
+def nsew_of_constant_ha(ha,dec):
+    R = np.dot(nsew_to_azel_matrix(skew,slope),azel_to_hadec_matrix(lat))
+    P = pos_vector(ha,dec)
+    ns,ew = pos_from_vector(np.dot(R,np.transpose(P,(2,0,1))).transpose((1,2,0)).squeeze().transpose())
+    ns,ew = _catch_discontinuitues(ns,ew)
+    return np.array((ns,ew))
+

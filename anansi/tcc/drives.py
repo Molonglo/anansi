@@ -33,6 +33,18 @@ SLOW = "slow"
 DISABLED = "disabled"
 VALID_STATES = [AUTO,SLOW,DISABLED]
 
+#
+# NS Drive status
+# 0,0,0,manual/auto,east_power,east_nlimit,east_slimit,running 
+# 0,0,0,manual/auto,west_power,west_nlimit,west_slimit,running 
+#
+# MD
+# clock east,direction(1 west, 0 east),SAZ,east_power,east_nlimit,east_slimit,running
+# clock west,direction(1 west, 0 east),SAZ,west_power,west_nlimit,west_slimit,running
+#
+
+
+
 DEFAULT_STATUS_DICT = {
     "east_count":0,
     "west_count":0,
@@ -250,6 +262,7 @@ class DriveInterface(object):
         finally:
             self._close_client()
             self._active.clear()
+            self.active_thread = None
 
     def _drive(self,drive_code,data):
         """Send a drive command to the eZ80.                                                       
