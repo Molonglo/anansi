@@ -10,6 +10,9 @@ DEFAULT_PATH = environ["ANANSI_CONFIG"]
 #eZ80 codes
 EZ80_CODES_CONFIG = "eZ80_codes.cfg"
 
+#mpsr_defaults
+MPSR_DEFAULTS_CONFIG = "mpsr_defaults.cfg"
+
 def guess_type(data):
     types = [int,float,complex,str]
     for typename in types:
@@ -24,7 +27,7 @@ def guess_type(data):
         except:
             pass
 
-class AnansiConfig(object):
+class RootConfig(object):
     def update(self,config):
         for section in config.sections():
             self.add_section(section)
@@ -68,9 +71,9 @@ class EZ80Codes(object):
 
     def get_code(self,name):
         return self._name_to_code_map[name.lower()]
-    
+   
 
-config = AnansiConfig()
+config = RootConfig()
     
 def _find_file(fname):
     if isfile(fname):
@@ -88,12 +91,14 @@ def _find_file(fname):
 def build_config(config_file=None):
     _config = ConfigParser()
     _config.read(_find_file(DEFAULT_CONFIG))
+    _config.read(_find_file(MPSR_DEFAULTS_CONFIG))
     if config_file is not None:
         _config.read(_find_file(config_file))
     config.update(_config)
     _config = ConfigParser()
     _config.read(_find_file(EZ80_CODES_CONFIG))
     config.eZ80_codes = EZ80Codes(_config)
+    
     
 def update_config_from_args(args):
     _config = ConfigParser()
