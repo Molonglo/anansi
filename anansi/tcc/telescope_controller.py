@@ -13,7 +13,7 @@ logger = logging.getLogger('anansi')
 
 class BaseTracker(Thread):
     def __init__(self, drive, coords, nsew, rate, tolerance, track, stop):
-        self._name = "%s Tracker"%(drive.name.upper())
+        self.name = "%s tracker thread"%(drive.name)
         self.drive = drive
         self.drive.clear_error()
         self._track = track

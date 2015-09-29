@@ -5,16 +5,16 @@ from threading import Lock, Thread
 from time import sleep
 
 def serialised(func):
-    locked._lock = Lock()
+    serialised._lock = Lock()
     @wraps(func)
     def wrapped(*args,**kwargs):
-        locked._lock.acquire()
+        serialised._lock.acquire()
         try:
             retval = func(*args,**kwargs)
         except Exception as error:
             raise error
         finally:
-            locked._lock.release()
+            serialised._lock.release()
         return retval
     return wrapped
 
@@ -66,6 +66,14 @@ def log_args(func):
         return retval
     return wrapped
 
+@serialised
+@serialised
+@serialised
+@serialised
+@serialised
+@serialised
+@serialised
+@serialised
 @retry(exception=ValueError)
 def test():
     raise ValueError("I was called")

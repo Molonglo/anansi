@@ -6,15 +6,23 @@ from anansi.comms import TCPClient
 from anansi.config import config
 from anansi import log
 
+OBS_TYPES = ['TRACKING', 'TRANSITING', 'STATIONARY']
+CONFIGS = ['TB','CORR','INDIV']
+
+class InvalidConfiguration(Exception):
+    def __init__(self,msg):
+        super(InvalidConfiguration,self).__init__(msg)
+
+
 class MPSRError(Exception):
     def __init__(self,response):
         msg = "MPSR returned failure state with message: %s"%response
         super(MPSRError,self).__init__(msg)
 
+
 class MPSRMessage(XMLMessage):
     def __init__(self):
         super(MPSRMessage,self).__init__(gen_element('mpsr_tmc_message'))
-        self.defaults = copy(config.mpsr_defaults.__dict__)
 
     def __str__(self):
         return super(MPSRMessage,self).__str__().replace("\n","")+"\r\n"
@@ -31,18 +39,17 @@ class MPSRMessage(XMLMessage):
         self.root.append(gen_element("command",text="start"))
         return str(self)
 
-    def prepare(self, **kwargs):
-        self.defaults.update(kwargs)
+    def prepare(self, mpsr_config):
         self.root.append(gen_element("command",text="prepare"))
-        self.root.append(self._source_parameters())
-        self.root.append(self._signal_parameters())
-        self.root.append(self._pfb_parameters())
-        self.root.append(self._observation_parameters())
+        self.root.append(self._source_parameters(mpsr_config))
+        self.root.append(self._signal_parameters(mpsr_config))
+        self.root.append(self._pfb_parameters(mpsr_config))
+        self.root.append(self._observation_parameters(mpsr_config))
         return str(self)
         
-    def _source_parameters(self):
+    def _source_parameters(self,mpsr_config):
         elem = gen_element('source_parameters')
-        _ = self.defaults
+        _ = mpsr_config
         elem.append(gen_element('name',text=_['source_name'],attributes={'epoch':_['epoch']}))
         elem.append(gen_element('ra',text=_['ra'],attributes={'units':_['ra_units']}))
         elem.append(gen_element('dec',text=_['dec'],attributes={'units':_['dec_units']}))
@@ -50,8 +57,8 @@ class MPSRMessage(XMLMessage):
         elem.append(gen_element('md_angle',text=_['md_angle'],attributes={'units':_['md_angle_units']}))
         return elem
 
-    def _signal_parameters(self):
-        _ = self.defaults
+    def _signal_parameters(self,mpsr_config):
+        _ = mpsr_config
         elem = gen_element('signal_parameters')
         elem.append(gen_element('nchan',text=_['nchan']))
         elem.append(gen_element('nbit',text=_['nbit']))
@@ -62,8 +69,8 @@ class MPSRMessage(XMLMessage):
         elem.append(gen_element('centre_frequency',text=_['cfreq'],attributes={'units':_['cfreq_units']}))
         return elem
     
-    def _pfb_parameters(self):
-        _ = self.defaults
+    def _pfb_parameters(self,mpsr_config):
+        _ = mpsr_config
         elem = gen_element('pfb_parameters')
         elem.append(gen_element('oversampling_ratio',text=_['oversampling_ratio']))
         elem.append(gen_element('sampling_time',text=_['tsamp'],attributes={'units':_['tsamp_units']}))
@@ -72,8 +79,8 @@ class MPSRMessage(XMLMessage):
         elem.append(gen_element('resolution',text=_['resolution']))
         return elem
     
-    def _observation_parameters(self):
-        _ = self.defaults
+    def _observation_parameters(self,mpsr_config):
+        _ = mpsr_config
         elem = gen_element('observation_parameters')
         elem.append(gen_element('observer',text=_['observer']))
         elem.append(gen_element('aq_processing_file',text=_['aq_proc_file']))
@@ -110,6 +117,35 @@ class MPSRQueryResponse(MPSRDefaultResponse):
         self.mpsr_status = node.find("mpsr_status").text
 
 
+class MPSRConfiguration(dict):
+    def __init__(self):
+        super(MPSRConfiguration,self).__init__(copy(config.mpsr_defaults.__dict__))
+        
+    def set_source(self,name,ra,dec):
+        self['source_name'] = name
+        self['ra'] = str(ra)
+        self['dec'] = str(dec)
+        
+    def set_type(self,obs_type):
+        if obs_type not in OBS_TYPES:
+            msg = ("%s is not a valid observation type\n"
+                   "valid types are: %s"%(obs_type,", ".join(OBS_TYPES)))
+            raise InvalidConfiguration(msg)
+        self['type'] = obs_type
+
+    def set_config(self,config_type):
+        if config_type == "TB":
+            self.update(config.mpsr_tb_config.__dict__)
+        elif config_type == "CORR":
+            self.update(config.mpsr_corr_config.__dict__)
+        elif config_type == "INDIV":
+            self.update(config.mpsr_indiv_config.__dict__)
+        else:
+            msg = ("%s is not a valid configuration\n"
+                   "valid types are: %s"%(config_type,", ".join(CONFIGS)))
+            raise InvalidConfiguration(msg)
+        
+
 class MPSRControls(object):
     def __init__(self):
         self._ip = config.mpsr_server.ip
@@ -128,8 +164,8 @@ class MPSRControls(object):
             raise MPSRError(response.response)
         return response
     
-    def prepare(self,**kwargs):
-        msg = MPSRMessage().prepare(**kwargs)
+    def prepare(self,mpsr_config):
+        msg = MPSRMessage().prepare(mpsr_config)
         return self._send(msg,MPSRDefaultResponse)
         
     def start(self):
@@ -143,3 +179,14 @@ class MPSRControls(object):
     def query(self):
         msg = MPSRMessage().query()
         return self._send(msg,MPSRQueryResponse)
+
+
+if __name__ == '__main__':
+    mpsr_config = MPSRConfiguration()
+    mpsr_config.set_source("J0457+4515","11:11:11","22:22:22")
+    mpsr_config.set_type('TRACKING')
+    mpsr_config.set_config('TB')
+    controller = MPSRControls()
+    controller.prepare(mpsr_config)
+    controller.start()
+    controller.stop()

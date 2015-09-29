@@ -8,6 +8,7 @@ from anansi.comms import TCPClient
 from anansi import exit_funcs
 from anansi.config import config
 from anansi import log
+from anansi.decorators import serialised
 import logging
 logger = logging.getLogger('anansi')
 
@@ -234,6 +235,7 @@ class DriveInterface(object):
     def active(self):
         return self._active.is_set()
             
+    @serialised
     def _drive_thread(self):
         """A thread to handle the eZ80 status loop while driving.                                  
                                                                                                    
@@ -287,6 +289,7 @@ class DriveInterface(object):
             self._active.clear()
             self.active_thread = None
 
+    @serialised
     def _drive(self,drive_code,data):
         """Send a drive command to the eZ80.                                                       
                                                                                                    
@@ -312,7 +315,7 @@ class DriveInterface(object):
                 raise error
             else:
                 if (code == "S") and (response == 0):
-                    self.active_thread = Thread(target=self._drive_thread)
+                    self.active_thread = Thread(target=self._drive_thread,name="%s drive thread"%self.name)
                     self.active_thread.daemon = True
                     self.active_thread.start()
                     break
