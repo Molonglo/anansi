@@ -45,7 +45,6 @@ VALID_STATES = [AUTO,SLOW,DISABLED]
 #
 
 
-
 DEFAULT_STATUS_DICT = {
     "east_count":0,
     "west_count":0,
@@ -95,7 +94,7 @@ class CountError(Exception):
     use cases.
 
     Args:
-    count -- the invalid requested coun
+    count -- the invalid requested count
     """
     def __init__(self,message,drive_obj):
         super(CountError,self).__init__(message)
@@ -121,13 +120,15 @@ class DriveClient(object):
     
     def _open_client(self):
         try:
-            self._client = TCPClient(self._ip,self._port,timeout=self.timeout)
+            self._client = TCPClient(self._ip,self._port,timeout=self._timeout)
         except Exception as error:
             logger.error("Could not open client to %s drive"%(self._drive_name),
                          extra=log.tcc_status(),exc_info=True)
             raise error
+        else:
+            logger.info("Successfully connected to drive",extra=log.tcc_status())
     
-    def close(self,client):
+    def close(self):
         try:
             self._client.close()
         except Exception as error:
@@ -150,16 +151,14 @@ class DriveClient(object):
     
     def receive(self):
         try:
-            response = self._client.receive(self.header_size)
+            response = self._client.receive(self._header_size)
         except Exception as error:
             raise error
-        header = codec.simple_decoder(response,self.header_decoder)
+        header = codec.simple_decoder(response,self._header_decoder)
         data_size = header["HOB"]*256+header["LOB"]
         if data_size > 0:
             data = self._client.receive(data_size)
             data_repr = unpack("B"*len(data),data)
-            msg = "Received data from %s drive: %s"%(self._drive_name,data_repr)
-            logger.debug(msg,extra=log.eZ80_status(code,data,self._drive_name))
         else:
             data = None
         return header,data
@@ -232,11 +231,14 @@ class DriveInterface(object):
         
     def new_client(self):
         client = DriveClient.from_interface(self)
+        return client
+            
+    def interrupt(self):
         self._interrupt.set()
         if self._active_drive:
             self._active_drive.join()
         self._interrupt.clear()
-            
+
     def active(self):
         return self._active.is_set()
                 
@@ -261,8 +263,10 @@ class DriveInterface(object):
                     code,response = self.parse(header,data)
                 except eZ80Interruption as error:
                     if self._interrupt.is_set():
+                        logger.info("Drive interrupted in a lovely gentle way.",extra=log.tcc_status())
                         break
                     else:
+                        logger.error("Drive interrupted in a nasty violent way.",extra=log.tcc_status())
                         raise error
                 if (code == "I") and (response == 0):
                     break
@@ -309,7 +313,8 @@ class DriveInterface(object):
         self.clear_error()
         client = self.new_client()
         self._active.set()
-        self._send_message(drive_code,data)
+        client.send(drive_code,data)
+        self.interrupt()
         while True:
             try:
                 header,data = client.receive()
@@ -393,9 +398,10 @@ class DriveInterface(object):
         Returns: Status dictionary                                                                 
         """
         if not self.active():
+            client = self.new_client()
             try:
-                client = self.new_client()
                 client.send("U",None)
+                self.interrupt()
                 code = None
                 while code != "U":
                     header,data = client.receive()
@@ -418,6 +424,7 @@ class DriveInterface(object):
         """
         client = self.new_client()
         client.send("0",None)
+        self.interrupt()
         code = None
         while code != "S":
             header,data = client.receive()
