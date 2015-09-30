@@ -242,7 +242,6 @@ class DriveInterface(object):
     def active(self):
         return self._active.is_set()
                 
-    @serialised
     def _drive_thread(self,client):
         """A thread to handle the eZ80 status loop while driving.                                  
                                                                                                    

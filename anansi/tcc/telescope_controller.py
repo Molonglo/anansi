@@ -13,6 +13,7 @@ logger = logging.getLogger('anansi')
 
 class BaseTracker(Thread):
     def __init__(self, drive, coords, nsew, rate, tolerance, track, stop):
+        Thread.__init__(self)
         self.name = "%s tracker thread"%(drive.name)
         self.drive = drive
         self.drive.clear_error()
@@ -23,7 +24,6 @@ class BaseTracker(Thread):
         self._stop = stop
         self.tolerance = tolerance
         self.on_source = False
-        Thread.__init__(self)
 
     def _max_tilt_offset(self,tilt):
         state = self.drive.get_status()

@@ -9,6 +9,7 @@ from anansi.tcc.tcc_utils import TCCMessage
 from anansi.ui_tools.dict_controller import DictController
 from anansi.ui_tools.accordion import Accordion,Chord
 from anansi.tcc.drives import VALID_STATES,AUTO,SLOW,DISABLED
+from anansi.utils import r2d
 
 def aabbcc_validate(value,min_,max_):
     try:
@@ -376,7 +377,7 @@ class ArmStatus(tk.Frame,object):
     @tilt.setter
     def tilt(self,val):
         self._tilt = val
-        self._tilt_var.set("Tilt: %.3f radians"%val)
+        self._tilt_var.set("Tilt: %.2f deg"%r2d(val))
         
     @property
     def driving(self):
@@ -452,7 +453,7 @@ class StatusMonitor(tk.Frame):
         self.status_ip = status_ip
         self.status_port = status_port
         self._target_var = tk.StringVar()
-        self._target_var.set("[Source]  NS  %.3f radians  MD  %.3f radians"%(0.0,0.0))
+        self._target_var.set("[Source]  NS  %.2f deg  MD  %.2f deg"%(0.0,0.0))
         self.init()
         self.update()
 
@@ -489,7 +490,7 @@ class StatusMonitor(tk.Frame):
         coords = xml.find("coordinates")
         ns = float(coords.find("NS").text)
         md = float(coords.find("EW").text)
-        self._target_var.set("[Source]  NS  %.3f radians  MD  %.3f radians"%(ns,md))
+        self._target_var.set("[Source]  NS  %.2f deg  MD  %.2f deg"%(r2d(ns),r2d(md)))
         for drive in ['ns','md']:
             _drive_ui = getattr(self,"_%s_drive"%drive)
             _drive = xml.find(drive)

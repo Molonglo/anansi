@@ -80,7 +80,7 @@ class StatusServer(TCPServer):
             self.status_dict[drive_name][arm]['state'] = getattr(drive,"%s_state"%arm)
             if self.controller.current_track is not None:
                 self.status_dict[drive_name][arm]['on_target'] = self.controller.current_track.on_target(drive_name,arm)
-            self.status_dict[drive_name][arm]['driving'] = drive.active_thread is not None
+            self.status_dict[drive_name][arm]['driving'] = drive.active()
 
 
     def update(self):
