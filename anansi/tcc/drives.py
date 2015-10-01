@@ -192,6 +192,8 @@ class DriveInterface(object):
         self.error_state = None
         self._active_drive = None
         self._active = Event()
+        self._east_active = Event()
+        self._west_active = Event()
         self._interrupt = Event()
         self.status_dict = copy(DEFAULT_STATUS_DICT)
         self.exit_funcs = exit_funcs
@@ -240,8 +242,14 @@ class DriveInterface(object):
         self._interrupt.clear()
 
     def active(self):
-        return self._active.is_set()
+        return self.east_active() or self.west_active()
                 
+    def east_active(self):
+        return self._east_active.is_set()
+    
+    def west_active(self):
+        return self._west_active.is_set()
+
     def _drive_thread(self,client):
         """A thread to handle the eZ80 status loop while driving.                                  
                                                                                                    
@@ -249,7 +257,7 @@ class DriveInterface(object):
         the event object of this class, the drive thread will be                                   
         stopped.                                                                                   
         """
-        logger.info("Spawned %s drive thread"%self.name,extra=log.tcc_status())
+        logger.debug("Spawned %s drive thread"%self.name,extra=log.tcc_status())
         east_reached = False
         west_reached = False
         east_pass_count = 0
@@ -262,10 +270,10 @@ class DriveInterface(object):
                     code,response = self.parse(header,data)
                 except eZ80Interruption as error:
                     if self._interrupt.is_set():
-                        logger.info("Drive interrupted in a lovely gentle way.",extra=log.tcc_status())
+                        logger.debug("Caught expected drive interruption.",extra=log.tcc_status())
                         break
                     else:
-                        logger.error("Drive interrupted in a nasty violent way.",extra=log.tcc_status())
+                        logger.error("Caught unexpected drive interruption.",extra=log.tcc_status())
                         raise error
                 if (code == "I") and (response == 0):
                     break
@@ -276,29 +284,31 @@ class DriveInterface(object):
                     elif (code == "I") and (response == 14):
                         east_reached = True
                         continue
-                    if not east_reached and self.status_dict['east_status'] == 112:
+                    if not east_reached and self.status_dict['east_status'] == 112 and self._east_active.is_set():
                         east_pass_count += 1
-                    if not west_reached and self.status_dict['west_status'] == 112:
+                    if not west_reached and self.status_dict['west_status'] == 112 and self._west_active.is_set():
                         west_pass_count +=1
                     west_crocked = west_pass_count >= count_limit
                     east_crocked = east_pass_count >= count_limit
-                    if east_crocked and west_crocked:
-                        logger.error("Both arm motors are not running for ns drive",extra=log.tcc_status())
-                        break
-                    elif east_crocked:
-                        logger.error("East arm motor is not running for ns drive",extra=log.tcc_status())
-                        break
-                    elif west_crocked:
-                        logger.error("West arm motor is not running for ns drive",
-                                     extra=log.tcc_status())
-                        break
+                    if east_crocked or west_crocked:
+                        if east_crocked and west_crocked:
+                            logger.error("Both arm motors are not running for ns drive",extra=log.tcc_status())
+                        elif east_crocked:
+                            logger.error("East arm motor is not running for ns drive",extra=log.tcc_status())
+                        elif west_crocked:
+                            logger.error("West arm motor is not running for ns drive",extra=log.tcc_status())
+                        Thread(target=self.stop).start()
         except Exception as error:
             logger.error("Caught exception in %s drive thread loop"%self.name,
                          extra=log.tcc_status(),exc_info=True)
             raise error
+        else:
+            logger.debug("Cleanly exiting drive thread.",extra=log.tcc_status())
         finally:
             client.close()
             self._active.clear()
+            self._east_active.clear()
+            self._west_active.clear()
             self._active_drive = None
 
     def _drive(self,drive_code,data):
@@ -329,6 +339,8 @@ class DriveInterface(object):
                              extra=log.tcc_status(),exc_info=True)
                 self.error_state = error
                 self._active.clear()
+                self._east_active.clear()
+                self._west_active.clear()
                 client.close()
                 raise error
             
@@ -529,6 +541,8 @@ class DriveInterface(object):
                 w_dir_speed = 8*wd + 4*ws
                 encoded_dir_speed = pack("B",e_dir_speed + w_dir_speed)
                 data = encoded_count+encoded_dir_speed
+                self._east_active.set()
+                self._west_active.set()
                 self._drive(BOTH_ARMS,data)
 
     def set_east_tilt(self,east_tilt):
@@ -550,6 +564,7 @@ class DriveInterface(object):
                 dir_speed = 2*ed + es
                 encoded_dir_speed = pack("B",dir_speed)
                 data = encoded_count+encoded_dir_speed
+                self._east_active.set()
                 self._drive(EAST_ARM,data)
 
     def set_west_tilt(self,west_tilt):
@@ -571,6 +586,7 @@ class DriveInterface(object):
                 dir_speed = 8*wd + 4*ws
                 encoded_dir_speed = pack("B",dir_speed)
                 data = encoded_count+encoded_dir_speed
+                self._west_active.set()
                 self._drive(WEST_ARM,data)
 
     def _calculate_tilts(self,u_dict):
