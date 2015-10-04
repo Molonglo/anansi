@@ -25,8 +25,8 @@ hhmmss = lambda val: aabbcc_validate(val,0,24)
 ddmmss = lambda val: aabbcc_validate(val,-90,90)
 dec_deg = lambda val: -90.0 < float(val) < 90.0
 dec_rad = lambda val: -pi/2 <= float(val) < pi/2
-ra_deg = lambda val: 0.0 <= float(val) < 360.0
-ra_rad = lambda val: 0.0 <= float(val) < pi*2    
+ra_deg = lambda val: -360 <= float(val) < 360.0
+ra_rad = lambda val: -pi*2 <= float(val) < pi*2    
 
 UNITS = {
     "hhmmss":{
