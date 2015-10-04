@@ -8,7 +8,6 @@ Author: @ifthisthenbreak
 
 from Tkinter import Tk, Frame, PhotoImage, Label
 
-
 class Chord(Frame):
     '''Tkinter Frame with title argument'''
     def __init__(self, parent, title='', *args, **kw):
@@ -59,6 +58,7 @@ class Accordion(Frame):
                        label=label, i=i: label.config(bg=self.style['highlight']))
             label.bind('<Leave>', lambda e,
                        label=label, i=i: label.config(bg=self.style['title_bg']))
+
                        
     def _click_handler(self, chord):
         if len(chord.grid_info()) == 0:

@@ -2,6 +2,7 @@ import Tkinter as tk
 from lxml import etree
 from collections import OrderedDict
 from numpy import pi
+import ephem as eph
 from anansi import args
 from anansi.config import config,update_config_from_args
 from anansi.comms import TCPClient
@@ -11,62 +12,52 @@ from anansi.ui_tools.accordion import Accordion,Chord
 from anansi.tcc.drives import VALID_STATES,AUTO,SLOW,DISABLED
 from anansi.utils import r2d
 
-def aabbcc_validate(value,min_,max_):
-    try:
-        h,m,s = value.split(":")
-        h = min_ <= int(h) < max_
-        m = 0 <= int(m) < 60
-        s = 0 <= float(s) < 60.0
-        return h and s and m
-    except:
-        return False
-
-hhmmss = lambda val: aabbcc_validate(val,0,24)
-ddmmss = lambda val: aabbcc_validate(val,-90,90)
-dec_deg = lambda val: -90.0 < float(val) < 90.0
-dec_rad = lambda val: -pi/2 <= float(val) < pi/2
-ra_deg = lambda val: -360 <= float(val) < 360.0
-ra_rad = lambda val: -pi*2 <= float(val) < pi*2    
 
 UNITS = {
     "hhmmss":{
-        "validators":[hhmmss,ddmmss],
-        "defaults": ["00:00:00","00:00:00"]
+        "defaults": ["00:00:00","00:00:00"],
+        "to_deg": [lambda x:r2d(float(eph.hours(x))),lambda x:r2d(float(eph.degrees(x)))]
         },
     "degrees":{
-        "validators":[ra_deg,dec_deg],
         "defaults": ["0.0","0.0"],
+        "to_deg": [lambda x:float(x), lambda x:float(x)]
         },
     "radians":{
-        "validators":[ra_rad,dec_rad],
         "defaults": ["0.0","0.0"],
+        "to_deg": [lambda x:r2d(float(x)), lambda x:r2d(float(x))]
         }
     }
 
 SYSTEMS = {
     "equatorial":{
         "labels":["RA","Dec"],
-        "units":["hhmmss","degrees","radians"]
+        "units":["hhmmss","degrees","radians"],
+        "ranges":[(0,360),(-90,90)]
         },
     "equatorial_ha":{
         "labels":["HA","Dec"],
-        "units":["hhmmss","degrees","radians"]
+        "units":["hhmmss","degrees","radians"],
+        "ranges":[(0,360),(-90,90)]        
         },
     "galactic":{
         "labels":["Glong","Glat"],
-        "units":["degrees","radians"]
+        "units":["degrees","radians"],
+        "ranges":[(0,360),(-90,90)]
         },
     "ecliptic":{
         "labels":["Elong","Elat"],
-        "units":["degrees","radians"]
+        "units":["degrees","radians"],
+        "ranges":[(0,360),(-90,90)]
         },
     "horizontal":{
         "labels":["Az","Elv"],
-        "units":["degrees","radians"]
+        "units":["degrees","radians"],
+        "ranges":[(0,360),(-90,90)]
         },
     "nsew":{
         "labels":["NS","EW"],
-        "units":["degrees","radians"]
+        "units":["degrees","radians"],
+        "ranges":[(-90,90),(-90,90)]
         }
     }
 
@@ -229,7 +220,9 @@ class ArmController(tk.Frame,object):
         self._arm_label = tk.Label(self,text=self._arm,width=12)
         self._mode_selector = Selector(self,VALID_STATES)
         self._mode_selector.value = AUTO
-        self._offset = ValueEntry(self,"Offset","0.0","degrees",Validator(dec_deg),show_units=True)
+        self._offset = ValueEntry(self,"Offset","0.0","degrees",
+                                  Validator(lambda x:-90 < float(x) < 90),
+                                  show_units=True)
         self._mode_label = tk.Label(self,text="Mode",width=6)
         self._arm_label.pack(side=tk.LEFT)
         self._mode_label.pack(side=tk.LEFT)
@@ -279,12 +272,12 @@ class CoordinatesController(tk.Frame,object):
                              self._system['labels'][0],
                              self._units['defaults'][0],
                              self._units_selector.value,
-                             Validator(self._units['validators'][0]))
+                             self._make_validator(0))
         self._y = ValueEntry(self._coords_frame,
                              self._system['labels'][1],
                              self._units['defaults'][1],
                              self._units_selector.value,
-                             Validator(self._units['validators'][1]))
+                             self._make_validator(1))
         self._system_selector.register_callback(self.update_system)
         self._units_selector.register_callback(self.update_units)
         self._title.pack()
@@ -293,18 +286,23 @@ class CoordinatesController(tk.Frame,object):
         self._units_selector.pack(side=tk.LEFT)
         self._x.pack()
         self._y.pack()
+
+    def _make_validator(self,idx):
+        val_range = self._system['ranges'][idx]
+        deg_func = self._units['to_deg'][idx]
+        return Validator(lambda x: val_range[0] <= deg_func(x) < val_range[1])
         
     def _update_x(self):
         self._x.label = self._system['labels'][0]
         self._x.value = self._units['defaults'][0]
         self._x.units = self._units_selector.value
-        self._x.validator = Validator(self._units['validators'][0])
+        self._x.validator = self._make_validator(0)
         
     def _update_y(self):
         self._y.label = self._system['labels'][1]
         self._y.value = self._units['defaults'][1]
         self._y.units =self._units_selector.value
-        self._y.validator = Validator(self._units['validators'][1])
+        self._y.validator = self._make_validator(1)
 
     def update_units(self):
         self._units = UNITS[self._units_selector.value]
@@ -524,10 +522,8 @@ class Controls(tk.Frame):
         tk.Button(self,text="Close",command=self.close).pack(side=tk.LEFT)
     
     def send_recv_anansi(self,msg):
-        print repr(msg)
         client = TCPClient(self.anansi_ip,self.anansi_port,timeout=20.0)
         client.send(str(msg))
-        print str(msg)
         response = client.receive()
         client.close()
         try:
@@ -614,6 +610,9 @@ class TCCGraphicalInterface(tk.Frame):
         self.controls.pack(pady=15,fill=tk.BOTH,padx=10)
         self.status = StatusMonitor(self,status_ip,status_port)
         self.status.pack(pady=15,fill=tk.BOTH)
+
+    
+
 
 
 def test():
