@@ -1,49 +1,17 @@
 import numpy as np
 from scipy.signal import medfilt
+from scipy.optimize import minimize
 
 ANTENNA_FILE_DTPYE = [("a","|S6"),("position","float32")]
 BASELINE_FILE_DTYPE = [("a","|S6"),("b","|S6")]
 BASELINE_DTYPE = [("idx","int32"),("a","|S6"),("b","|S6"),("dist","float32"),
                   ("sn","float32"),("coarse_delay","float32"),
-                  ("fine_delay","float32"),("phase","float32")]
+                  ("fine_delay","float32"),("phase","float32"),
+                  ("total_delay","float32")]
 
 def random_complex(amp,size):
     a = 1+np.tan(np.random.uniform(-np.pi,np.pi,size))*1j
     return a/abs(a)
-
-class DelayFinder(object):
-    def __init__(self,baselines,cp_spectra):
-        self.baselines = baselines
-        self.cp_spec = cp_spectra
-        self.phases = np.angle(self.cp_spec)
-        npairs,nchans = self.cp_spec.shape
-        self.npairs = npairs
-        self.nchans = nchans
-        self.chans = np.arange(self.nchans)
-        self.chan_mask = np.ones(self.nchans).astype("bool")
-        self.pair_mask = np.ones(self.npairs).astype("bool")
-        self.lags = self.find_coarse_delay()
-
-    def threshold_snr(self,snr):
-        self.pair_mask[self.baselines['sn'] < snr] = False
-        
-    def threshold_delay(self,delay):
-        self.pair_mask[self.baselines['coarse_delay'] > delay] = False
-        
-    def make_edge_mask(self,fine_nchans,width=8):
-        self.chan_mask[np.roll(self.chans,-width/2)%fine_nchans < width] = False
-        
-    def find_coarse_delay(self):
-        lags = abs(np.fft.fftshift(np.fft.ifft(self.cp_spec),axes=(1,)))
-        lags -= np.median(lags,axis=1).reshape(self.npairs,1)
-        lags /= 1.4826 * np.median(abs(lags),axis=1).reshape(self.npairs,1)
-        self.baselines['sn'] = lags.max(axis=1)
-        self.baselines['coarse_delay'] = lags.argmax(axis=1)-self.nchans/2
-        return lags
-        
-    def apply_coarse_delay(self):
-        pass
-
 
 class Baselines(object):
     def __init__(self,baselines,cp_spectra,nfine):
@@ -65,14 +33,29 @@ class Baselines(object):
     def copy(self):
         return Baselines(np.copy(self.info),np.copy(self.cp),self.nfine)
 
-    def get_coarse_delays(self):
-        lags = generate_lags(self)
-        self.info['sn'] = lags.max(axis=1)
-        self.info['coarse_delay'] = lags.argmax(axis=1)-self.nchans/2
+    def threshold(self,condition):
+        idxs = np.where(condition)
+        self.info['sn'][idxs] = 0.0
+        
+        
+def remove_coarse_delay(b):
+    b = b.copy()
+    lags = generate_lags(b)
+    b.info['sn'] = lags.max(axis=1)
+    b.info['coarse_delay'] = lags.argmax(axis=1)-b.nchans/2
+    ramps = np.vstack([ramp(b.nchans,i)] for i in b.info['coarse_delay'])
+    return Baselines(b.info,b.cp*ramps,b.nfine)
 
-    def remove_coarse_delays(self):
-        ramps = np.vstack([ramp(self.nchans,i)] for i in self.info['coarse_delay'])
-        self.cp *= ramps
+def remove_fine_delay(b):
+    b = b.copy()
+    def minfunc(delay,spec):
+        return 1./abs((ramp(b.nchans,delay)*spec).sum())
+    for ii,spec in enumerate(b.cp):
+        result = minimize(minfunc,[0.0],args=(spec,),bounds=[(-1.0,1.0)])
+        b.info['fine_delay'][ii] = result['x'][0]
+    b.info['total_delay'] = b.info['coarse_delay']+b.info['fine_delay']
+    ramps = np.vstack([ramp(b.nchans,i)] for i in b.info['fine_delay'])
+    return Baselines(b.info,b.cp*ramps,b.nfine)
 
 def ramp(size,shift):
     return np.e**(np.pi*2*1j*np.arange(size)/float(size) * shift)
@@ -109,7 +92,7 @@ def load_valid_baselines(cc_file,antenna_file,priant_file,baselines_file,nchans)
     baselines_update = np.recarray(baselines.size,dtype=BASELINE_DTYPE)
     for ii,b in enumerate(baselines):
         dist =  abs(antennas[b['a']] - antennas[b['b']])
-        baselines_update[ii] = (ii,b['a'],b['b'],dist,0.0,0,0.0,0.0)
+        baselines_update[ii] = (ii,b['a'],b['b'],dist,0.0,0,0.0,0.0,0.0)
     return baselines_update,cp_specs
     
 
