@@ -9,9 +9,6 @@ BASELINE_DTYPE = [("idx","int32"),("a","|S6"),("b","|S6"),("dist","float32"),
                   ("fine_delay","float32"),("phase","float32"),
                   ("total_delay","float32")]
 
-def random_complex(amp,size):
-    a = 1+np.tan(np.random.uniform(-np.pi,np.pi,size))*1j
-    return a/abs(a)
 
 class Baselines(object):
     def __init__(self,baselines,cp_spectra,nfine):
@@ -36,7 +33,7 @@ class Baselines(object):
     def threshold(self,condition):
         idxs = np.where(condition)
         self.info['sn'][idxs] = 0.0
-        
+       
         
 def remove_coarse_delay(b):
     b = b.copy()
@@ -57,6 +54,10 @@ def remove_fine_delay(b):
     ramps = np.vstack([ramp(b.nchans,i)] for i in b.info['fine_delay'])
     return Baselines(b.info,b.cp*ramps,b.nfine)
 
+def random_complex(amp,size):
+    a = 1+np.tan(np.random.uniform(-np.pi,np.pi,size))*1j
+    return a/abs(a)
+
 def ramp(size,shift):
     return np.e**(np.pi*2*1j*np.arange(size)/float(size) * shift)
 
@@ -66,14 +67,18 @@ def generate_lags(b):
     lags /= 1.4826 * np.median(abs(lags),axis=1).reshape(b.npairs,1)
     return lags
 
-def replace_channel_edges(b,width=8):
+def replace_channel_edges(b,width=8,random=True):
     b = b.copy()
     w = width/2
     z = b.cp.reshape(b.npairs,b.ncoarse,b.nfine)
     means = np.median(abs(z[:,:,w:-w:]),axis=2).reshape(b.npairs,b.ncoarse,1)
     pool = random_complex(1,[b.npairs,b.ncoarse,width]) * means
-    z[:,:,:w]  = pool[:,:,:w]
-    z[:,:,-w:] = pool[:,:,w:]
+    if random:
+        z[:,:,:w]  = pool[:,:,:w]
+        z[:,:,-w:] = pool[:,:,w:]
+    else:
+        z[:,:,:w]  = 0j
+        z[:,:,-w:] = 0j
     b.cp = z.reshape(b.npairs,b.nchans)
     return b
 

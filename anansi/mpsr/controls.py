@@ -1,18 +1,19 @@
 from threading import Thread
 from lxml import etree
 from copy import copy
+import logging
 from anansi.xml import XMLMessage,XMLError,gen_element
 from anansi.comms import TCPClient
 from anansi.config import config
 from anansi import log
+logger = logging.getLogger('anansi.mpsr')
 
 OBS_TYPES = ['TRACKING', 'TRANSITING', 'STATIONARY']
-CONFIGS = ['TB','CORR','INDIV']
+CONFIGS = ['TB','CORR','INDIV','FB']
 
 class InvalidConfiguration(Exception):
     def __init__(self,msg):
         super(InvalidConfiguration,self).__init__(msg)
-
 
 class MPSRError(Exception):
     def __init__(self,response):
@@ -26,6 +27,9 @@ class MPSRMessage(XMLMessage):
 
     def __str__(self):
         return super(MPSRMessage,self).__str__().replace("\n","")+"\r\n"
+
+    def pprint(self):
+        return super(MPSRMessage,self).__str__()
 
     def query(self):
         self.root.append(gen_element("command",text="query"))
@@ -99,6 +103,7 @@ class MPSRDefaultResponse(XMLMessage):
         try:
             super(MPSRDefaultResponse,self).__init__(etree.fromstring(msg))
         except:
+            logger.error("Unknown MPSR message: %s"%msg)
             raise XMLError(msg)
         self._parse()
         
@@ -140,9 +145,12 @@ class MPSRConfiguration(dict):
             self.update(config.mpsr_corr_config.__dict__)
         elif config_type == "INDIV":
             self.update(config.mpsr_indiv_config.__dict__)
+        elif config_type == "FB":
+            self.update(config.mpsr_fb_config.__dict__)
         else:
             msg = ("%s is not a valid configuration\n"
                    "valid types are: %s"%(config_type,", ".join(CONFIGS)))
+            logger.error(msg)
             raise InvalidConfiguration(msg)
         
 
@@ -157,11 +165,15 @@ class MPSRControls(object):
             client = TCPClient(self._ip,self._port,timeout=self._timeout)
         except Exception as error:
             raise error
+        logger.debug("Sending XML to MPSR:\n%s"%msg)
         client.send(msg)
         response = response_class(client.receive())
+        logger.debug("Received XML from MPSR:\n%s"%response)
         client.close()
         if not response.passed:
-            raise MPSRError(response.response)
+            error = MPSRError(response.response)
+            logger.error(str(error))
+            raise error
         return response
     
     def prepare(self,mpsr_config):
