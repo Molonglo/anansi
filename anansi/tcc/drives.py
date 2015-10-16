@@ -101,7 +101,6 @@ class CountError(Exception):
         logger.info(message,extra=log.tcc_status())
 
 
-
 class DriveClient(object):
     def __init__(self,node,ip,port,timeout,name):
         self._node = node
@@ -195,6 +194,7 @@ class DriveInterface(object):
         self._east_active = Event()
         self._west_active = Event()
         self._interrupt = Event()
+        self._lock = Lock()
         self.status_dict = copy(DEFAULT_STATUS_DICT)
         self.exit_funcs = exit_funcs
         self.exit_funcs.register(self.clean_up)
@@ -249,6 +249,10 @@ class DriveInterface(object):
     
     def west_active(self):
         return self._west_active.is_set()
+
+    def _status_thread(self):
+        if not self.active():
+            
 
     def _drive_thread(self,client):
         """A thread to handle the eZ80 status loop while driving.                                  

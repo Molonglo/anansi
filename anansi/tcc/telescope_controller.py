@@ -231,4 +231,3 @@ class TelescopeController(object):
         ew = d2r(config.presets.maintenance_stow_ew)
         self._drive_to(ns,ew)
 
-    

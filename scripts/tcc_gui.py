@@ -37,7 +37,7 @@ SYSTEMS = {
     "equatorial_ha":{
         "labels":["HA","Dec"],
         "units":["hhmmss","degrees","radians"],
-        "ranges":[(0,360),(-90,90)]        
+        "ranges":[(-360,360),(-90,90)]        
         },
     "galactic":{
         "labels":["Glong","Glat"],
