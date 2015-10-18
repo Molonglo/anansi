@@ -417,7 +417,7 @@ class DriveStatus(tk.Frame,object):
         tk.Frame.__init__(self,parent,relief=tk.SUNKEN,borderwidth=2)
         self._drive = drive
         self._error_var = tk.StringVar()
-        self._error_var.set("Error: None")
+        self._error_var.set("Status: OK")
         self.init()
         
     def init(self):
@@ -439,7 +439,7 @@ class DriveStatus(tk.Frame,object):
     def error(self,val):
         if val == "None":
             self._error_label.config(bg='green')
-            self._error_var.set("Error: None")
+            self._error_var.set("Status: OK")
         else:
             self._error_label.config(bg='red')
             self._error_var.set("Error: %s"%val)

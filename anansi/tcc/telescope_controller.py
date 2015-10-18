@@ -112,7 +112,7 @@ class BaseTracker(Thread):
                 self.end()
                 break
             elif self.drive.active():
-                sleep(3)
+                sleep(5)
                 continue
             else:
                 dt = self.drive_time()
@@ -127,7 +127,7 @@ class BaseTracker(Thread):
                 self.end()
                 break
             elif self.drive.active() or self.on_target():
-                sleep(3)
+                sleep(5)
                 continue
             else:
                 logger.info("Updating tracking position for %s drive"%self.drive.name,

@@ -8,7 +8,7 @@ from anansi.comms import TCPClient
 from anansi import exit_funcs
 from anansi.config import config
 from anansi import log
-from anansi.decorators import serialised
+from anansi.decorators import locked_method
 import logging
 logger = logging.getLogger('anansi')
 
@@ -99,7 +99,6 @@ class CountError(Exception):
     def __init__(self,message,drive_obj):
         super(CountError,self).__init__(message)
         logger.info(message,extra=log.tcc_status())
-
 
 class DriveClient(object):
     def __init__(self,node,ip,port,timeout,name):
@@ -195,6 +194,7 @@ class DriveInterface(object):
         self._west_active = Event()
         self._interrupt = Event()
         self._lock = Lock()
+        self._drive_thread_lock = Lock()
         self.status_dict = copy(DEFAULT_STATUS_DICT)
         self.exit_funcs = exit_funcs
         self.exit_funcs.register(self.clean_up)
@@ -250,10 +250,7 @@ class DriveInterface(object):
     def west_active(self):
         return self._west_active.is_set()
 
-    def _status_thread(self):
-        if not self.active():
-            
-
+    @locked_method("_drive_thread_lock")
     def _drive_thread(self,client):
         """A thread to handle the eZ80 status loop while driving.                                  
                                                                                                    
@@ -315,6 +312,7 @@ class DriveInterface(object):
             self._west_active.clear()
             self._active_drive = None
 
+    @locked_method("_lock")
     def _drive(self,drive_code,data):
         """Send a drive command to the eZ80.                                                       
                                                                                                    
@@ -378,11 +376,15 @@ class DriveInterface(object):
         elif code == "U":
             decoded_response = codec.simple_decoder(data,self._data_decoder)
             decoded_response = self._calculate_tilts(decoded_response)
+            _old = self.status_dict.copy()
             self.status_dict.update(decoded_response)
             msg = ("Received {name} drive position update    east: {east_tilt: <8.5} "
                    "({east_count})   west: {west_tilt: <8.5} ({west_count})"
                    ).format(name=self.name,**self.status_dict)
-            logger.info(msg,extra=log.eZ80_position(self.name,self.status_dict))
+            if not self.status_dict == _old:
+                logger.info(msg,extra=log.eZ80_position(self.name,self.status_dict))
+            else:
+                logger.info(msg)
         else:
             error = Exception("Unrecognized command option '%s' (ascii byte) received from %s drive"%(
                     unpack("B",code),self.name))
@@ -404,6 +406,7 @@ class DriveInterface(object):
             sleep(0.3)            
         return code,decoded_response
 
+    @locked_method("_lock")
     def get_status(self):
         """Get status dictionary for NS drive.                                                     
                                                                                                    
@@ -432,6 +435,7 @@ class DriveInterface(object):
                 client.close()
         return self.status_dict
 
+    @locked_method("_lock")
     def stop(self):
         """Send stop command to eZ80.                                                              
                                                                                                    
@@ -445,7 +449,8 @@ class DriveInterface(object):
             header,data = client.receive()
             code,_ = self.parse(header,data)
         client.close()
-
+        
+    @locked_method("_lock")
     def set_verbose(self,verbose=True):
         """Send set verbose message to eZ80.
 

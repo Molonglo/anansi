@@ -3,6 +3,7 @@ import logging.handlers
 import atexit
 from struct import unpack
 from Queue import Queue
+from functools import partial
 from threading import Thread,Event
 from logutils.queue import QueueHandler, QueueListener
 
@@ -28,6 +29,22 @@ class ColoredFormatter(logging.Formatter):
             record.levelname = COLOR_SEQ % (30 + COLORS[levelname]) + levelname + RESET_SEQ
         return logging.Formatter.format(self, record)
 
+class LogQueue(object):
+    def __init__(self):
+        self.queue = Queue()
+
+    def add(self,func,*args,**kwargs):
+        self.queue.put((func,args,kwargs))
+        
+    def flush(self):
+        while not self.queue.empty():
+            func,args,kwargs = self.queue.get()
+            func(*args,**kwargs)
+            
+    def clear(self):
+        while not self.queue.empty():
+            func,args,kwargs = self.queue.get()
+            
 
 class CustomQueueListener(QueueListener):
     def __init__(self, queue, *handlers):

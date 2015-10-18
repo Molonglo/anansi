@@ -1,5 +1,5 @@
 from threading import Event
-from time import sleep
+from time import sleep,time
 import copy
 import logging
 from lxml import etree
@@ -9,6 +9,8 @@ from anansi.utils import gen_xml_element
 from anansi import exit_funcs
 from anansi import log
 logger = logging.getLogger('anansi')
+
+UPDATE_WAIT = 20.0 #seconds
 
 DRIVE_ARM_STATUS = {
     "count":0,
@@ -70,9 +72,19 @@ class StatusServer(TCPServer):
         TCPServer.__init__(self,ip,port,handler_class=StatusRequestHandler)
         self.status_dict = STATUS_DICT_DEFAULTS
         self.controller = controller
+        self.last_update = {
+            "ns":0.0,
+            "md":0.0
+            }
 
     def _get_drive_info(self,drive,drive_name):
-        status = drive.status_dict
+        now = time()
+        if now - self.last_update[drive_name] > UPDATE_WAIT:
+            self.last_update[drive_name] = now
+            status = drive.get_status()
+        else:
+            status = drive.status_dict
+
         for arm in ['east','west']:
             self.status_dict[drive_name][arm]['count'] = status['%s_count'%arm]
             self.status_dict[drive_name][arm]['system_status'] = status['%s_status'%arm]

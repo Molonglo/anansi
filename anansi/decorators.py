@@ -4,6 +4,21 @@ from functools import wraps,partial
 from threading import Lock, Thread
 from time import sleep
 
+def locked_method(lock_name):
+    def decorator(func):
+        @wraps(func)
+        def wrapped(self,*args,**kwargs):
+            lock = self.__getattribute__(lock_name)
+            lock.acquire()
+            try:
+                return func(self,*args,**kwargs)
+            except Exception as error:
+                raise error
+            finally:
+                lock.release()
+        return wrapped
+    return decorator
+
 def serialised(func):
     serialised._lock = Lock()
     @wraps(func)
