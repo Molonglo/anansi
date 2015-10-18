@@ -1,5 +1,9 @@
 from lxml import etree
-from anansi.xml import XMLMessage,gen_element
+from anansi.xml import XMLMessage,gen_element,XMLError
+
+class TCCError(Exception):
+    def __init__(self,msg):
+        super(TCCError,self).__init__(msg)
 
 class TCCMessage(XMLMessage):
     def __init__(self,user,comment=""):
@@ -57,4 +61,56 @@ class TCCMessage(XMLMessage):
         elem.append(ns)
         elem.append(md)
         self.root.append(elem)
+
+
+class TCCResponseHandler(XMLMessage):
+    def __init__(self,msg):
+        try:
+            super(MPSRDefaultResponse,self).__init__(etree.fromstring(msg))
+        except:
+            logger.error("Unknown TCC message: %s"%msg)
+            raise XMLError(msg)
+        self._parse()
+    
+    def _parse(self):
+        if self.root.find('success') is not None:
+            self.passed = True
+            self.message = self.root.find('success').text
+        elif self.root.find('error') is not None:
+            self.passed = False
+            self.message = self.root.find('error').text
+            raise TCCError(self.message)
+
+
+class TCCControls(object):
+    def __init__(self,user="anansi"):
+        conf = config.tcc_server
+        self.ip = conf.ip 
+        self.port = conf.port 
+        self.user = user
+
+    def _send(self,msg):
+        client = TCPClient(self.ip,self.port,timeout=10.0)
+        client.send(msg)
+        return TCCResponseHandler(client.receive())
+
+    def track(self,x,y,system,units,**kwargs):
+        msg = TCCMessage(self.user)
+        msg.tcc_pointing(x,y,system=system,units=units,**kwargs)
+        return self._send(str(msg))
+    
+    def stop(self):
+        msg = TCCMessage(self.user)
+        msg.tcc_command("stop")
+        return self._send(str(msg))
+    
+    def maintenance_stow(self):
+        msg = TCCMessage(self.user)
+        msg.tcc_command("maintenance_stow")
+        return self._send(str(msg))
+
+    def wind_stow(self):
+        msg = TCCMessage(self.user)
+        msg.tcc_command("wind")
+        return self._send(str(msg))
 
