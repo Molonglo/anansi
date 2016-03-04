@@ -2,6 +2,7 @@ from threading import Thread
 from lxml import etree
 from copy import copy
 import logging
+import commands
 from anansi.xml import XMLMessage,XMLError,gen_element
 from anansi.comms import TCPClient
 from anansi.config import config
@@ -10,6 +11,8 @@ logger = logging.getLogger('anansi.mpsr')
 
 OBS_TYPES = ['TRACKING', 'TRANSITING', 'STATIONARY']
 CONFIGS = ['TB','CORR','INDIV','FB']
+MPSR_SUCCESS = 0
+LOAD_CONFIG = "/home/dada/scripts/load_config.csh"
 
 class InvalidConfiguration(Exception):
     def __init__(self,msg):
@@ -191,6 +194,31 @@ class MPSRControls(object):
     def query(self):
         msg = MPSRMessage().query()
         return self._send(msg,MPSRQueryResponse)
+    
+def mpsr_startup():
+    cmd = "ssh dada@mpsr-srv0 mopsr_backend_start.pl"
+    status,output = commands.getstatusoutput(cmd)
+    if status != MPSR_SUCCESS:
+        raise MPSRError(output)
+    
+def mpsr_shutdown():
+    cmd= "ssh dada@mpsr-srv0 mopsr_backend_stop.pl"
+    status,output = commands.getstatusoutput(cmd)
+    if status != MPSR_SUCCESS:
+        raise MPSRError(output)
+
+def mpsr_load_config(config_name):
+    """ Load an MPSR configuration.
+    
+    Currently supported configurations are:
+    - live_bfp_40chan_16ant_22pfb_352_ants_512scr
+    - live_bfp_40chan_16ant_22pfb_352_beams
+    - live_corr_40chan_16ant_22pfb
+    """
+    cmd= "ssh dada@mpsr-srv0 %s %s"%(LOAD_CONFIG,config_name)
+    status,output = commands.getstatusoutput(cmd)
+    if status != MPSR_SUCCESS:
+        raise MPSRError(output)
 
 
 if __name__ == '__main__':

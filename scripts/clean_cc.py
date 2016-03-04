@@ -22,7 +22,7 @@ for cc_file in sorted(glob.glob("*.cc")):
     print "masking..."
     x.mask_channel_edges(width=8);
     x.mask_police_frequencies();
-    x.mask_short_baselines(min_dist=300.0)
+    #x.mask_short_baselines(min_dist=300.0)
     print "finding rfi..."
     x.mask_rfi(3.0)
     cp[valid_idxs,:] = x.cp.filled()[:,:]

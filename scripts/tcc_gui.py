@@ -570,14 +570,52 @@ class Controls(tk.Frame):
         self.send_recv_anansi(msg)
 
     def wind_stow(self):
+        system = "nsew"
+        units = "radians"
+        track = "off"
+        x = "0.0"
+        y = "0.0"
         msg = TCCMessage("tcc_gui")
-        msg.tcc_command("wind_stow")
+        msg.tcc_pointing(x,y,system=system,
+                         tracking=track,
+                         ns_east_state=self.ns_drive.east.mode,
+                         ns_west_state=self.ns_drive.west.mode,
+                         md_east_state=self.md_drive.east.mode,
+                         md_west_state=self.md_drive.west.mode,
+                         ns_east_offset="0.0",
+                         ns_west_offset="0.0",
+                         md_east_offset="0.0",
+                         md_west_offset="0.0",
+                         units=units,
+                         offset_units="degrees")
         self.send_recv_anansi(msg)
+        #msg = TCCMessage("tcc_gui")
+        #msg.tcc_command("wind_stow")
+        #self.send_recv_anansi(msg)
 
     def maintenance_stow(self):
+        system = "nsew"
+        units = "degrees"
+        track = "off"
+        x = "45.0"
+        y = "0.0"
         msg = TCCMessage("tcc_gui")
-        msg.tcc_command("maintenance_stow")
+        msg.tcc_pointing(x,y,system=system,
+                         tracking=track,
+                         ns_east_state=self.ns_drive.east.mode,
+                         ns_west_state=self.ns_drive.west.mode,
+                         md_east_state=self.md_drive.east.mode,
+                         md_west_state=self.md_drive.west.mode,
+                         ns_east_offset="0.0",
+                         ns_west_offset="0.0",
+                         md_east_offset="0.0",
+                         md_west_offset="0.0",
+                         units=units,
+                         offset_units="degrees")
         self.send_recv_anansi(msg)
+        #msg = TCCMessage("tcc_gui")
+        #msg.tcc_command("maintenance_stow")
+        #self.send_recv_anansi(msg)
 
     def stop(self):
         msg = TCCMessage("tcc_gui")
