@@ -261,6 +261,8 @@ class DriveInterface(object):
         logger.debug("Spawned %s drive thread"%self.name,extra=log.tcc_status())
         east_reached = False
         west_reached = False
+        east_started = False
+        west_started = False
         east_pass_count = 0
         west_pass_count = 0
         count_limit = 10
@@ -285,19 +287,50 @@ class DriveInterface(object):
                     elif (code == "I") and (response == 14):
                         east_reached = True
                         continue
+                    
+                    if not east_started:
+                        east_started = True
+                        east_count_start = self.status_dict['east_count']
+                        
+                    if not west_started:
+                        west_started = True
+                        west_count_start = self.status_dict['west_count']
+
+                    east_counts_moved = abs(self.status_dict['east_count']-east_count_start)
+                    west_counts_moved = abs(self.status_dict['west_count']-west_count_start)
+
                     if not east_reached and self.status_dict['east_status'] == 112 and self._east_active.is_set():
                         east_pass_count += 1
+                                            
                     if not west_reached and self.status_dict['west_status'] == 112 and self._west_active.is_set():
                         west_pass_count +=1
+                                            
                     west_crocked = west_pass_count >= count_limit
                     east_crocked = east_pass_count >= count_limit
+
+                    east_moved = east_counts_moved > 1
+                    west_moved = west_counts_moved > 1
+                    
+                    #print "West arm details:"
+                    #print "Has started:",west_started
+                    #print "Initial count:",west_count_start
+                    #print "Current count:",self.status_dict['west_count']
+                    #print "Count difference:",west_counts_moved
+                    #print "Crocked counter:",west_pass_count
+                    #print "Is crocked:",west_crocked
+                    #print "Has moved:",west_moved
+
+                    if (east_crocked and not east_moved) or (west_crocked and not west_moved):
+                        if (east_crocked and not east_moved) and (west_crocked and not west_moved):
+                            msg = "Both arms failed to start driving NS drive"
+                        elif east_crocked and not east_moved:
+                            msg = "East arm failed to start driving NS drive"
+                        elif west_crocked and not west_moved:
+                            msg = "West arm failed to start driving NS drive"
+                        logger.error(msg,extra=log.tcc_status())
+                        self.error_state = msg  ## this is important as it is used by the tracking thread
+
                     if east_crocked or west_crocked:
-                        if east_crocked and west_crocked:
-                            logger.error("Both arm motors are not running for ns drive",extra=log.tcc_status())
-                        elif east_crocked:
-                            logger.error("East arm motor is not running for ns drive",extra=log.tcc_status())
-                        elif west_crocked:
-                            logger.error("West arm motor is not running for ns drive",extra=log.tcc_status())
                         Thread(target=self.stop).start()
         except Exception as error:
             logger.error("Caught exception in %s drive thread loop"%self.name,
