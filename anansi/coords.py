@@ -1,8 +1,8 @@
 import numpy as np
 import ephem as e
 
-skew = 0.00001
-slope = 0.00358
+skew = 2.3755870374367263e-05
+slope = 0.0034494653328734047
 lat = -0.617342348978
 
 def rotation_matrix(angle, d):
@@ -53,7 +53,7 @@ def transform(a,b,R,inverse=True):
     return a,b
 
 def telescope_to_nsew_matrix(skew,slope):
-    R = rotation_matrix(skew,"z")
+    R = rotation_matrix(-skew,"x")
     R = np.dot(R,rotation_matrix(slope,"y"))
     return R
 
