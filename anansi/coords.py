@@ -98,11 +98,14 @@ def _catch_discontinuitues(ns,ew,tol=0.4):
         ns = np.insert(ns,idx+1,np.nan)
     return ns,ew
 
-def nsew_of_constant_dec(ha,dec):
+def nsew_of_constant_dec(ha, dec, catch_discont=True):
     R = np.dot(nsew_to_azel_matrix(skew,slope),azel_to_hadec_matrix(lat))
     P = pos_vector(ha,np.ones_like(ha)*dec)
     ns,ew = pos_from_vector(np.dot(R,np.transpose(P,(2,0,1))).transpose((1,2,0)).squeeze().transpose())
-    ns,ew = _catch_discontinuitues(ns,ew)
+
+    if catch_discont:
+	ns,ew = _catch_discontinuitues(ns,ew)
+
     return np.array((ns,ew))
 
 def nsew_of_constant_ha(ha,dec):
