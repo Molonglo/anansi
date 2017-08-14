@@ -211,15 +211,15 @@ class Selector(tk.Frame,ObservableMixin):
 
 
 class ArmController(tk.Frame,object):
-    def __init__(self,parent,arm):
+    def __init__(self,parent,arm,states):
         tk.Frame.__init__(self,parent)
         self._arm = arm
-        self.init()
+        self.init(states)
         
-    def init(self):
+    def init(self,states):
         self._arm_label = tk.Label(self,text=self._arm,width=12)
-        self._mode_selector = Selector(self,VALID_STATES)
-        self._mode_selector.value = AUTO
+        self._mode_selector = Selector(self,states)
+        self._mode_selector.value = states[0]
         self._offset = ValueEntry(self,"Offset","0.0","degrees",
                                   Validator(lambda x:-90 < float(x) < 90),
                                   show_units=True)
@@ -239,17 +239,20 @@ class ArmController(tk.Frame,object):
 
     
 class DriveController(tk.Frame):
-    def __init__(self,parent,name,**kwargs):
-        tk.Frame.__init__(self,parent,**kwargs)
+    def __init__(self,parent,name,always_disabled=False):
+        tk.Frame.__init__(self,parent)
         self._text = name
+        self._states = VALID_STATES
+        if always_disabled:
+            self._states = [DISABLED]
         self.init()
 
     def init(self):
         self._name_label = tk.Label(self,text=self._text)
         self._name_label.pack(side=tk.TOP)
-        self.east = ArmController(self,"East:  ")
+        self.east = ArmController(self,"East:  ",self._states)
         self.east.pack(side=tk.TOP)
-        self.west = ArmController(self,"West:  ")
+        self.west = ArmController(self,"West:  ",self._states)
         self.west.pack(side=tk.TOP)
 
 
@@ -627,15 +630,16 @@ class Controls(tk.Frame):
 
 
 class TCCGraphicalInterface(tk.Frame):
-    def __init__(self,parent,anansi_ip,anansi_port,status_ip,status_port):
+    def __init__(self,parent,anansi_ip,anansi_port,status_ip,status_port,
+            md_always_disabled,ns_always_disabled):
         tk.Frame.__init__(self,parent)
         self._coordinate_controller = CoordinatesController(self)
         self._accordion = Accordion(self)
         self._ns_chord = Chord(self._accordion, title='NS Drive Controls')
-        self._ns_drive = DriveController(self._ns_chord,"NS Drive")
+        self._ns_drive = DriveController(self._ns_chord,"NS Drive",ns_always_disabled)
         self._ns_drive.pack()
         self._md_chord = Chord(self._accordion, title='MD Drive Controls')
-        self._md_drive = DriveController(self._md_chord,"MD Drive")
+        self._md_drive = DriveController(self._md_chord,"MD Drive",md_always_disabled)
         self._md_drive.pack()
         self._accordion.append_chords([self._ns_chord,self._md_chord])
         self._coordinate_controller.pack(pady=10)
@@ -657,7 +661,12 @@ def test():
     root = tk.Tk()
     tcc = config.tcc_server
     status = config.status_server
-    ui = TCCGraphicalInterface(root,tcc.ip,tcc.port,status.ip,status.port)
+    md_always_disabled = config.md_drive.always_disabled \
+            if hasattr(config.md_drive,"always_disabled") else False
+    ns_always_disabled = config.ns_drive.always_disabled \
+            if hasattr(config.ns_drive,"always_disabled") else False
+    ui = TCCGraphicalInterface(root,tcc.ip,tcc.port,status.ip,status.port,
+            md_always_disabled,ns_always_disabled)
     ui.pack()
     return ui
 
@@ -666,7 +675,12 @@ if __name__ == "__main__":
     root = tk.Tk()
     tcc = config.tcc_server
     status = config.status_server
-    ui = TCCGraphicalInterface(root,tcc.ip,tcc.port,status.ip,status.port)
+    md_always_disabled = config.md_drive.always_disabled \
+            if hasattr(config.md_drive,"always_disabled") else False
+    ns_always_disabled = config.ns_drive.always_disabled \
+            if hasattr(config.ns_drive,"always_disabled") else False
+    ui = TCCGraphicalInterface(root,tcc.ip,tcc.port,status.ip,status.port,
+            md_always_disabled,ns_always_disabled)
     ui.pack()
     root.wm_title("Anansi TCC Interface")
     root.mainloop()
