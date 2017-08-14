@@ -93,6 +93,7 @@ class StatusServer(TCPServer):
             if self.controller.current_track is not None:
                 self.status_dict[drive_name][arm]['on_target'] = self.controller.current_track.on_target(drive_name,arm)
             self.status_dict[drive_name][arm]['driving'] = getattr(drive,"%s_active"%arm)()
+            self.status_dict[drive_name][arm]['offset'] = getattr(drive,"%s_offset"%arm)
 
 
     def update(self):
@@ -148,6 +149,7 @@ class StatusServer(TCPServer):
             root.append(gen_xml_element("state",str(self.status_dict[drive][arm]['state'])))
             root.append(gen_xml_element("on_target",str(self.status_dict[drive][arm]['on_target'])))
             root.append(gen_xml_element("system_status",str(self.status_dict[drive][arm]['system_status'])))
+            root.append(gen_xml_element("offset",str(self.status_dict[drive][arm]['offset'])))
             
         for drive in ["ns","md"]:
             _drive = gen_xml_element(drive)
