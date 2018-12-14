@@ -3,7 +3,7 @@ import os
 import numpy as np
 from anansi.calib import calib
 
-antenna_file,priant_file,baselines_file,nchans = "obs.antenna","obs.priant","obs.baselines",1280
+antenna_file,priant_file,baselines_file,nchans = "obs.antenna","obs.priant","obs.baselines",40
 
 try:
     os.mkdir("masked")
@@ -18,7 +18,7 @@ for cc_file in sorted(glob.glob("*.cc")):
     cp_valid = cp[valid_idxs]
     print "found %d valid baselines..."%valid_idxs.sum()
     print "loading..."
-    x = calib.Baselines(b_valid,cp_valid,32)
+    x = calib.Baselines(b_valid,cp_valid,1)
     print "masking..."
     x.mask_channel_edges(width=8);
     x.mask_police_frequencies();
